@@ -68,7 +68,7 @@ export class ToolRuntime {
       if (tool.kind === "read") {
         result = { ok: true, data: await tool.handler(args as never, ctx) };
       } else {
-        result = { ok: true, data: await this.requestConfirmation(tool, args, ctx) };
+        result = { ok: true, data: await this.requestConfirmation(tool, args, rawArgs ?? {}, ctx) };
       }
     } catch (e) {
       result = { ok: false, error: errorMessage(e) };
@@ -82,7 +82,14 @@ export class ToolRuntime {
     return result;
   }
 
-  private async requestConfirmation(tool: Extract<ToolDef, { kind: "write" }>, args: unknown, ctx: ToolContext) {
+  // payload には検証前の引数を保存する。confirm_action のときにもう一度 zod で検証するので、
+  // 検証後の値を保存すると、.transform() が 2 回かかったり、Date などが JSON で崩れたりするため
+  private async requestConfirmation(
+    tool: Extract<ToolDef, { kind: "write" }>,
+    args: unknown,
+    rawArgs: unknown,
+    ctx: ToolContext,
+  ) {
     const preview = await tool.preview(args as never, ctx);
     const confirmationId = randomBytes(9).toString("base64url");
     const expiresAt = new Date(ctx.now.getTime() + CONFIRMATION_TTL_MIN * 60_000);
@@ -91,7 +98,7 @@ export class ToolRuntime {
       templeId: ctx.actor.templeId,
       tool: tool.name,
       actorStaffId: ctx.actor.staffId,
-      payload: args as object,
+      payload: rawArgs as object,
       preview: preview.summary,
       expiresAt,
     });

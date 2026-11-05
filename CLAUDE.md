@@ -24,6 +24,7 @@
 - ほかの機能と同じトランザクションで書き込む関数は、引数に `tx`（`DbOrTx`）を受け取る
 - 日時は DB では `timestamptz`。画面と MCP では日本時間で扱う（`src/domain/core/time.ts` の `jst`、`formatJst`、`parseJstDateTime` など）
 - MCP のツールは `defineReadTool` / `defineWriteTool`（`src/mcp/framework/define.ts`）で定義する。書き込みは必ず `defineWriteTool` にする（2 段階の確認と監査ログは仕組みが受け持つ）
+- 書き込みのツールの `execute` は、すべての書き込みを 1 つの `db.transaction` の中で行う（失敗したときは同じ `confirmation_id` で再実行できるので、途中まで書き込むと重複する）
 - MCP のサーバーでは `console.log` を使わない（標準出力は通信に使う）
 - Next.js は 16。Cache Components は使わない。middleware は `src/proxy.ts`（名前が proxy に変わった）。書き方に迷ったら `node_modules/next/dist/docs/` を読む
 - 管理画面のページでは `getCurrentStaff()` / `getStaffActor()`（`src/lib/staff-auth.ts`）でログインしているスタッフを取る

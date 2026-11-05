@@ -35,6 +35,18 @@ const record = defineWriteTool({
   },
 });
 
+const received: number[] = [];
+const doubling = defineWriteTool({
+  name: "doubling",
+  description: "テスト用（引数に transform がある書き込み）",
+  input: { n: z.number().transform((x) => x * 2) },
+  preview: async ({ n }) => ({ summary: `${n} を記録します` }),
+  execute: async ({ n }) => {
+    received.push(n);
+    return { n };
+  },
+});
+
 let runtime: ToolRuntime;
 let ctx: ToolContext;
 let otherCtx: ToolContext;
@@ -56,7 +68,8 @@ describe("MCP のツールの実行（2 段階の確認と監査ログ）", () =
   beforeEach(async () => {
     const seed = await resetDb();
     executed.length = 0;
-    runtime = new ToolRuntime([echo, record]);
+    received.length = 0;
+    runtime = new ToolRuntime([echo, record, doubling]);
     const jushoku = (await getStaffById(seed.get("staff:jushoku")))!;
     const fuku = (await getStaffById(seed.get("staff:fukujushoku")))!;
     ctx = { actor: { ...staffActor(jushoku, "mcp"), staffId: jushoku.id }, now: NOW };
@@ -131,6 +144,13 @@ describe("MCP のツールの実行（2 段階の確認と監査ログ）", () =
     assert.match((await lastAudit()).result ?? "", /^error:/);
     // 印が外れているので、もう一度呼ぶと（また失敗するが）「実行済み」にはならない
     assert.match(error(await runtime.call("confirm_action", { confirmation_id }, ctx)), /実行できませんでした/);
+  });
+
+  it("引数の transform は、プレビューと実行でそれぞれ 1 回だけかかる", async () => {
+    const d = data(await runtime.call("doubling", { n: 3 }, ctx));
+    assert.equal(d.preview, "6 を記録します");
+    data(await runtime.call("confirm_action", { confirmation_id: d.confirmation_id }, ctx));
+    assert.deepEqual(received, [6]);
   });
 
   it("ツール名の重複と予約名は、起動の時点でエラーにする", () => {
