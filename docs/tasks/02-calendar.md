@@ -1,7 +1,7 @@
 # 02 スタッフのカレンダー
 
 > 段階 1。00 が終わったら始める。**削らない**（場面 0 で担当者の空きを使う）。
-> 仕様: spec.md §3.2、§4（私的な予定）、§9（staff、staff_events、staff_event_assignees）
+> 仕様: spec.md §3.2、§4（私的な予定）、§9（staff_events、staff_event_assignees。`staff` は 00 のテーブルを使う）
 
 ## 担当する範囲
 - `src/domain/calendar/`、`src/db/schema/calendar.ts`、`src/db/seed/calendar.ts`

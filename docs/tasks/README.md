@@ -69,8 +69,21 @@ tests/<機能>/           # テスト
 
 - **書き換えてよいのは、自分の機能のディレクトリとファイルだけ**。ほかの機能の関数は呼ぶだけにする。変更が必要なら、その機能のタスクファイルの「依頼」の欄に書き足す
 - **共有のファイル**（`src/db/schema/index.ts`、`src/db/seed/index.ts`、`src/mcp/server.ts`、管理画面のナビゲーション、`package.json`）には、行を追記するだけにする。衝突しても解決しやすくするため
-- **スキーマの変更**: 段階 0 で全テーブルを作る。並列で作業している間に変える場合は、自分の `db/schema/<機能>.ts` だけを変え、`npm run db:push` で反映する（マイグレーションのファイルは作らない。番号が衝突するため）
+- **テーブルの持ち主は 1 つの機能だけ**にする。ほかの機能は、持ち主の関数を通して使う
+
+  | 機能 | 持つテーブル |
+  |---|---|
+  | core | `temples`、`staff`、`pending_actions`、`audit_logs` |
+  | ledger | `households`、`persons`、`person_relations`、`contacts`、`contact_logs` |
+  | calendar | `staff_events`、`staff_event_assignees` |
+  | facility | `facilities`、`reservations` |
+  | memorial | `memorial_requests`、`memorial_services`、`memorial_service_targets` |
+  | forms | `forms`、`form_questions`、`form_household_tokens`、`form_responses` |
+  | portal | `portal_accounts`、`portal_invites`、`portal_login_tokens` |
+- **スキーマの変更**: 段階 0 で全テーブルを作る。並列で作業している間に変える場合は、自分の `db/schema/<機能>.ts` だけを変え、`npm run db:push` で反映する（マイグレーションのファイルは作らない。番号が衝突するため）。Drizzle の push で作れないもの（拡張、排他制約）は `src/db/sql/` の SQL ファイルに書き、`db:reset` が push のあとに流す
 - **作業場所**: 機能ごとに git worktree を作る（ブランチ名は `feat/<機能>`）。終わったら `spec-and-scaffold` にマージする
+  - **worktree ごとに別の DB を使う**。同じ Postgres のコンテナの中に、`tera_<機能>` と `tera_<機能>_test` の DB を作り、worktree ごとの `.env` の `DATABASE_URL` で切り替える。DB を共有すると、`db:push` がほかの worktree で追加した列を消してしまうため
+  - worktree ごとに `npm install` を行い、`npm run dev` のポートを分ける（例: 台帳 3001、カレンダー 3002）
 - **完了したタスク**は `[x]` にして、実装と同じコミットに含める
 - **仕様にないことを決めたら**、`docs/spec.md` の決定事項と決定ログ（§13）にも書く。各タスクファイルの「決めること」は、着手したときに決める
 

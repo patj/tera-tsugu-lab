@@ -1,7 +1,7 @@
 # 06 檀家ポータル
 
 > 段階 2。ログインと家系図は 01 のあとに始められる。法要の申し込みは 04、行事の申し込みは 05、空き状況は 03 のインターフェースを使う。
-> 仕様: spec.md §2.1、§9（portal_accounts、portal_invites、portal_login_tokens、person_relations）、docs/roles.md
+> 仕様: spec.md §2.1、§9（portal_accounts、portal_invites、portal_login_tokens。`person_relations` は 01 の `getFamilyTree` を通して使う）、docs/roles.md
 > 遅れたときに**最初に**薄くする機能（家系図を一覧表示にする → 家族の権限を固定にする → 場面 3 の檀家の回答は個別リンクのままにする）
 
 ## 担当する範囲

@@ -31,7 +31,7 @@
 ## タスク
 
 ### ひな形を戻す
-- [ ] `git stash pop` で、退避してあるひな形を戻す
+- [ ] `git stash apply` で、退避してあるひな形を戻す（`README.md` と `CLAUDE.md` は衝突しうるので、手で合わせる）。起動を確かめてから `git stash drop` する
 - [ ] `npm install`、`docker compose up -d`、`npm run dev` で起動を確かめる
 - [ ] Next.js のドキュメント（`node_modules/next/dist/docs/`）で、このバージョンの App Router、middleware、Server Actions の書き方を確かめる（`AGENTS.md` の指示）
 
@@ -53,7 +53,10 @@
   - `forms.status` の初期値を `draft` にする
   - `audit_logs.channel` の値を `web` / `mcp` / `portal` にする
   - `care_*` のテーブルは外す（§7 は保留中）。`src/care-sdk/` と `tools/` も外す
-- [ ] 施設の予約の重複を DB でも防ぐ: `btree_gist` の排他制約で、同じ施設の `pending` と `confirmed` の時間が重ならないようにする（03 のドメイン層のチェックと二重にする）
+- [ ] README の「テーブルの持ち主」の表に合わせて、スキーマのファイルを分ける
+- [ ] 施設の予約の重複を DB でも防ぐ（03 のドメイン層のチェックと二重にする）。Drizzle の push では作れないので、`src/db/sql/` の SQL ファイルに書く
+  - `CREATE EXTENSION IF NOT EXISTS btree_gist`
+  - `EXCLUDE USING gist (facility_id WITH =, tstzrange(start_at, end_at) WITH &&) WHERE (status IN ('pending', 'confirmed'))`
 - [ ] `npm run db:push` が通る
 
 ### 共通のドメイン層（`src/domain/core/`）
@@ -81,8 +84,9 @@
 ### シードとテスト
 - [ ] `seed/index.ts` から各機能の `seed/<機能>.ts` を順番に呼ぶ仕組み。`npm run db:seed`
 - [ ] `seed/core.ts`: お寺（日蓮宗、§9 の設定の初期値）とスタッフ（住職、副住職、執事長は `is_officiant`。奥様、寺務員、アルバイト。ログインできる人とできない人を両方入れる）
-- [ ] `npm run db:reset`: DB を空にして、スキーマを反映し、シードを入れる（何度でも作り直せるようにする）
-- [ ] テスト用の DB と、`tests/**/*.test.ts` を実行する `npm test`
+- [ ] `npm run db:reset`: DB を空にして、スキーマを反映し（push のあとに `src/db/sql/` を流す）、シードを入れる（何度でも作り直せるようにする）
+- [ ] DB の名前を `.env` の `DATABASE_URL` で切り替えられるようにする。指定した DB がなければ作る（worktree ごとに別の DB を使うため。README を参照）
+- [ ] テスト用の DB（`<DB の名前>_test`）と、`tests/**/*.test.ts` を実行する `npm test`
 - [ ] `npm run typecheck`、`npm run lint` が通る
 
 ### 開発のルール
@@ -90,7 +94,7 @@
 
 ## 決めること
 - 日時の扱い: DB は `timestamptz` にし、画面とツールでは Asia/Tokyo で表示する（案）
-- テスト用の DB の作り方（同じ Postgres に別の DB を作る、など）
+- `npm run dev` のポートを `.env` で変えられるようにする方法
 
 ## 完了の条件
 - `npm test`、`npm run typecheck`、`npm run lint` が通る

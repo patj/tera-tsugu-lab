@@ -30,6 +30,7 @@
   - `getFamilyTree(householdId)` → 個人と `person_relations`（06 の家系図で使う）
   - `listUpcomingMemorials(actor, { from, to })` → 期間内に年忌を迎える故人を、回忌ごとにまとめた一覧
 - **対応記録**: `addContactLog(actor, tx?, { householdId, kind, body })`（06 の「家族の権限の代行」からも使う）
+- **一般コンタクト**: `createContact(actor, tx?, { name, phone?, email? })`（03 の公開の申請フォームが使う）
 
 ## タスク
 
