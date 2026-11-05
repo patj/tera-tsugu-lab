@@ -6,8 +6,9 @@
 ## 担当する範囲
 - 設定ファイル一式（`package.json`、`drizzle.config.ts`、`docker-compose.yml`、`.env.example`、`CLAUDE.md`）
 - `src/domain/core/`、`src/db/`（`schema/index.ts`、`schema/core.ts`、`client.ts`、`seed/index.ts`、`seed/core.ts`）
-- `src/mcp/server.ts`、`src/mcp/framework/`
-- `src/app/layout.tsx`、`src/app/admin/layout.tsx`（ナビゲーション）、`src/app/login/`、スタッフ認証の middleware
+- `src/mcp/server.ts`、`src/mcp/framework/`、`src/mcp/tools/index.ts`、`src/mcp/tools/core.ts`
+- `src/app/layout.tsx`、`src/app/admin/layout.tsx`、`src/app/admin/nav.ts`（ナビゲーション）、`src/app/login/`、`src/proxy.ts`（Next.js 16 で middleware から名前が変わった）、`src/lib/`
+- `scripts/`（DB の作成、`db:reset`、テストの実行、MCP の設定の出力）
 - テストの仕組み（`tests/` の構成、テスト用の DB）
 
 ## 依存先
@@ -31,14 +32,15 @@
 ## タスク
 
 ### ひな形を戻す
-- [ ] `git stash apply` で、退避してあるひな形を戻す（`README.md` と `CLAUDE.md` は衝突しうるので、手で合わせる）。起動を確かめてから `git stash drop` する
-- [ ] `npm install`、`docker compose up -d`、`npm run dev` で起動を確かめる
-- [ ] Next.js のドキュメント（`node_modules/next/dist/docs/`）で、このバージョンの App Router、middleware、Server Actions の書き方を確かめる（`AGENTS.md` の指示）
+- [x] `git stash apply` で、退避してあるひな形を戻す（`README.md` と `CLAUDE.md` は衝突しうるので、手で合わせる）。起動を確かめてから `git stash drop` する
+  - stash にあった古い下書き（`src/domain/nenki.ts` など。v0.2 の数え方で一周忌を 1 としていた）は取り込まなかった。stash は消さずに残してある
+- [x] `npm install`、`docker compose up -d`、`npm run dev` で起動を確かめる
+- [x] Next.js のドキュメント（`node_modules/next/dist/docs/`）で、このバージョンの App Router、middleware、Server Actions の書き方を確かめる（`AGENTS.md` の指示）
 
 ### ディレクトリとスキーマ
-- [ ] README の「並列で作るときの決まり」のディレクトリを作る
-- [ ] `src/db/schema.ts` を `src/db/schema/<機能>.ts` に分け、`schema/index.ts` でまとめる。`drizzle.config.ts` の `schema` をディレクトリに向ける
-- [ ] スキーマを spec.md §9（v0.6）に合わせる。stash のスキーマは v0.6 より前のもので、次の違いがある
+- [x] README の「並列で作るときの決まり」のディレクトリを作る
+- [x] `src/db/schema.ts` を `src/db/schema/<機能>.ts` に分け、`schema/index.ts` でまとめる。`drizzle.config.ts` の `schema` をディレクトリに向ける
+- [x] スキーマを spec.md §9（v0.6）に合わせる。stash のスキーマは v0.6 より前のもので、次の違いがある
   - `staff_schedules` → `staff_events`（visibility、owner_staff_id、category、title、body）と `staff_event_assignees` にする
   - `staff`: `email` と `password_hash` を任意にする（ログインしない人がいる）
   - `households`: `contact_person_id`（窓口）を追加する
@@ -53,48 +55,55 @@
   - `forms.status` の初期値を `draft` にする
   - `audit_logs.channel` の値を `web` / `mcp` / `portal` にする
   - `care_*` のテーブルは外す（§7 は保留中）。`src/care-sdk/` と `tools/` も外す
-- [ ] README の「テーブルの持ち主」の表に合わせて、スキーマのファイルを分ける
-- [ ] 施設の予約の重複を DB でも防ぐ（03 のドメイン層のチェックと二重にする）。Drizzle の push では作れないので、`src/db/sql/` の SQL ファイルに書く
+- [x] README の「テーブルの持ち主」の表に合わせて、スキーマのファイルを分ける
+- [x] 施設の予約の重複を DB でも防ぐ（03 のドメイン層のチェックと二重にする）。Drizzle の push では作れないので、`src/db/sql/` の SQL ファイルに書く
   - `CREATE EXTENSION IF NOT EXISTS btree_gist`
   - `EXCLUDE USING gist (facility_id WITH =, tstzrange(start_at, end_at) WITH &&) WHERE (status IN ('pending', 'confirmed'))`
-- [ ] `npm run db:push` が通る
+- [x] `npm run db:push` が通る
 
 ### 共通のドメイン層（`src/domain/core/`）
-- [ ] `Actor` の型
-- [ ] 時間の区間の関数とテスト（重なり、結合、空き時間。日をまたぐ場合、端がちょうど接する場合）
-- [ ] お寺の設定の読み込みと型
-- [ ] 宗派プリセットの型と読み込み（中身は 01）
-- [ ] 監査ログの書き込み
+- [x] `Actor` の型
+- [x] 時間の区間の関数とテスト（重なり、結合、空き時間。日をまたぐ場合、端がちょうど接する場合）
+- [x] お寺の設定の読み込みと型
+- [x] 宗派プリセットの型と読み込み（中身は 01）
+- [x] 監査ログの書き込み
 
 ### スタッフの認証と管理画面の枠
-- [ ] メールとパスワードでのログイン、ログアウト（パスワードは bcrypt などでハッシュにする）
-- [ ] `/admin` 以下をログイン必須にする
-- [ ] 管理画面のレイアウトとナビゲーション（台帳、法要、カレンダー、施設、フォーム、ポータルの管理）。各機能は、ナビゲーションに 1 行を追加するだけで済む形にする
-- [ ] 大きめの文字の基本スタイル（§8）
+- [x] メールとパスワードでのログイン、ログアウト（パスワードは bcrypt などでハッシュにする）
+- [x] `/admin` 以下をログイン必須にする
+- [x] 管理画面のレイアウトとナビゲーション（台帳、法要、カレンダー、施設、フォーム、ポータルの管理）。各機能は、ナビゲーションに 1 行を追加するだけで済む形にする
+- [x] 大きめの文字の基本スタイル（§8）
 
 ### MCP の本体
-- [ ] stdio のエントリポイント（`npm run mcp`）。環境変数 `MCP_ACTOR` で操作者のスタッフを決める
-- [ ] `defineReadTool` / `defineWriteTool` と、`pending_actions` を使った 2 段階の確認（有効期限は 10 分。期限切れと実行済みの `confirmation_id` は拒否する）
-- [ ] `confirm_action` ツール
-- [ ] すべての呼び出しを `audit_logs` に残す
-- [ ] 各機能の `src/mcp/tools/<機能>.ts` を 1 行で登録できる `server.ts`
-- [ ] 確かめるための仮のツール（読み取り 1 つ、書き込み 1 つ）。各機能のツールがそろったら消す
-- [ ] Claude Desktop の設定例を README に書く
+- [x] stdio のエントリポイント（`npm run mcp`）。環境変数 `MCP_ACTOR` で操作者のスタッフを決める
+- [x] `defineReadTool` / `defineWriteTool` と、`pending_actions` を使った 2 段階の確認（有効期限は 10 分。期限切れと実行済みの `confirmation_id` は拒否する）
+- [x] `confirm_action` ツール
+- [x] すべての呼び出しを `audit_logs` に残す
+- [x] 各機能の `src/mcp/tools/<機能>.ts` を 1 行で登録できる `server.ts`
+- [x] 確かめるための仮のツール（読み取りの `whoami`、書き込みの `debug_write_note`）。`whoami` は残す。`debug_write_note` は各機能の書き込みのツールがそろったら消す（07）
+- [x] Claude Desktop の設定例を README に書く
 
 ### シードとテスト
-- [ ] `seed/index.ts` から各機能の `seed/<機能>.ts` を順番に呼ぶ仕組み。`npm run db:seed`
-- [ ] `seed/core.ts`: お寺（日蓮宗、§9 の設定の初期値）とスタッフ（住職、副住職、執事長は `is_officiant`。奥様、寺務員、アルバイト。ログインできる人とできない人を両方入れる）
-- [ ] `npm run db:reset`: DB を空にして、スキーマを反映し（push のあとに `src/db/sql/` を流す）、シードを入れる（何度でも作り直せるようにする）
-- [ ] DB の名前を `.env` の `DATABASE_URL` で切り替えられるようにする。指定した DB がなければ作る（worktree ごとに別の DB を使うため。README を参照）
-- [ ] テスト用の DB（`<DB の名前>_test`）と、`tests/**/*.test.ts` を実行する `npm test`
-- [ ] `npm run typecheck`、`npm run lint` が通る
+- [x] `seed/index.ts` から各機能の `seed/<機能>.ts` を順番に呼ぶ仕組み。`npm run db:seed`
+- [x] `seed/core.ts`: お寺（日蓮宗、§9 の設定の初期値）とスタッフ（住職、副住職、執事長は `is_officiant`。奥様、寺務員、アルバイト。ログインできる人とできない人を両方入れる）
+- [x] `npm run db:reset`: DB を空にして、スキーマを反映し（push のあとに `src/db/sql/` を流す）、シードを入れる（何度でも作り直せるようにする）
+- [x] DB の名前を `.env` の `DATABASE_URL` で切り替えられるようにする。指定した DB がなければ作る（worktree ごとに別の DB を使うため。README を参照）
+- [x] テスト用の DB（`<DB の名前>_test`）と、`tests/**/*.test.ts` を実行する `npm test`
+- [x] `npm run typecheck`、`npm run lint` が通る
 
 ### 開発のルール
-- [ ] `CLAUDE.md` に、ディレクトリの決まりと「自分の機能のディレクトリだけを書き換える」決まりを書く（このファイルと README を指す）
+- [x] `CLAUDE.md` に、ディレクトリの決まりと「自分の機能のディレクトリだけを書き換える」決まりを書く（このファイルと README を指す）
 
-## 決めること
-- 日時の扱い: DB は `timestamptz` にし、画面とツールでは Asia/Tokyo で表示する（案）
-- `npm run dev` のポートを `.env` で変えられるようにする方法
+## 決めたこと
+- 日時の扱い: DB は `timestamptz` にし、画面とツールでは日本時間で扱う。日本には夏時間がないので +09:00 の固定で計算する（`src/domain/core/time.ts`）
+- テスト用の DB: 同じ Postgres の中に `<DB の名前>_test` を作る。`npm test` が毎回作り直す。テストのファイルは 1 つずつ順に流す
+- `npm run dev` のポート: `npm run dev -- -p 3001` で変える
+- Next.js の Cache Components は使わない（DB を読む画面を素直に書けるようにするため）
+- パスワードは scrypt でハッシュにする。ログインの状態は HMAC で署名した cookie（7 日間）
+- MCP のツールの登録は `src/mcp/tools/index.ts` にまとめる（`server.ts` は起動だけ）
+- Claude Desktop の設定は `npm run mcp:config` で出力する（Claude Desktop は PATH が短く、作業ディレクトリも決まっていないので、node、tsx、tsconfig を絶対パスで書く）
+- `audit_logs` に `result`（ok / needs_confirmation / error: ...）の列を足した（spec.md §4 の「結果」を残すため）
+- `staff` に `kana` と `position`（表示順）、`staff_events` に `cancelled_at` の列を足した
 
 ## 完了の条件
 - `npm test`、`npm run typecheck`、`npm run lint` が通る

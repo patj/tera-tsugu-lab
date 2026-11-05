@@ -349,7 +349,7 @@ tools/kokoro-log/
 | テーブル | 主なカラム |
 |---|---|
 | `temples` | name, sect（宗派プリセット）, settings（jsonb: memorial_duration_min = 40, buffer_min = 10, slot_first_start = 10:00, slot_last_start = 15:00, slot_step_min = 60） |
-| `staff` | name, role_title（住職 / 副住職 / 執事長 / 奥様 / 寺務員 / アルバイトなど）, email?, password_hash?（ログインしない人もいる）, is_officiant（法要を担当するか） |
+| `staff` | name, kana?, role_title（住職 / 副住職 / 執事長 / 奥様 / 寺務員 / アルバイトなど）, email?, password_hash?（ログインしない人もいる）, is_officiant（法要を担当するか）, position（表示順） |
 | `portal_accounts` | person_id, email, can_view_household, can_apply_memorial, last_login_at（檀家のポータルのアカウント） |
 | `portal_invites` | person_id, code, expires_at, used_at（招待コード） |
 | `portal_login_tokens` | portal_account_id, token_hash, expires_at, used_at（マジックリンク） |
@@ -362,7 +362,7 @@ tools/kokoro-log/
 | `contact_logs` | household_id, staff_id, kind, body, created_at |
 | `facilities` | name, position（表示順）（用途は限定しない） |
 | `reservations` | facility_id, kind（memorial / photo / tea / other）, status（pending / confirmed / rejected / cancelled）, start_at, end_at（準備と片付けを含む）, household_id? / contact_id?, memorial_service_id?, request_code, reject_reason?, notes |
-| `staff_events` | visibility（private / shared）, owner_staff_id, category（法要 / 行事 / 外出 / 来客 / その他 / 私用）, title, body, start_at, end_at, memorial_service_id? |
+| `staff_events` | visibility（private / shared）, owner_staff_id, category（法要 / 行事 / 外出 / 来客 / その他 / 私用）, title, body, start_at, end_at, memorial_service_id?, cancelled_at? |
 | `staff_event_assignees` | staff_event_id, staff_id（業務の予定の担当者。私的な予定は本人 1 人） |
 | `memorial_services` | household_id, seshu_person_id? / seshu_name?, location（寺 / 自宅 / 墓前）, start_at, duration_min, travel_before_min?, travel_after_min?（自宅・墓前のとき）, officiant_staff_id, status（scheduled / done / cancelled） |
 | `memorial_service_targets` | memorial_service_id, person_id, kaiki（回忌。一周忌は 2）※複数霊位供養に対応するため N 対 N |
@@ -371,7 +371,7 @@ tools/kokoro-log/
 | `form_household_tokens` | form_id, household_id, token |
 | `form_responses` | form_id, household_id?, person_id?（ポータルから申し込んだ人）, respondent_name?, contact?, answers（jsonb）, source（portal / member_link / public） |
 | `pending_actions` | confirmation_id, tool, payload, preview, expires_at, executed_at |
-| `audit_logs` | actor, channel（web / mcp / portal）, action, target, summary, created_at |
+| `audit_logs` | actor, channel（web / mcp / portal）, action, target, summary, result（ok / needs_confirmation / error）, created_at |
 | ※ 以下 4 つはメンタルケア（保留中）。ハッカソン版では作らない | |
 | `care_subjects` | nickname, linked_household_id?, created_at（匿名の相談者） |
 | `care_entries` | subject_id, tool_id, ciphertext, crisis_flag, created_at |
@@ -508,3 +508,4 @@ tools/kokoro-log/
 | 11/5 | 台本は場面 0 と場面 5 の両方を見せ、場面 5 は短くする。場面 3 の檀家の回答は、11/7 までは個別リンク、11/8 にポータル経由に差し替える | 検証の流れは場面 0 で見せ、ポータルが遅れても場面 3 を通せるようにするため（レビューの指摘 1-1） |
 | 11/5 | 申し込みに故人ごとの回忌を持たせる。個人に携帯番号とメールを持たせる。所属の履歴と物理削除はハッカソン後にする。状態の値と設定の項目を決める | レビューの指摘 3-1、3-3、3-4、3-8、3-9 |
 | 11/5 | 実装のタスクを機能ごとに分けて docs/tasks/ に置く。ソースも機能ごとのディレクトリに分け、基盤のあとは機能ごとに並列で実装できるようにする | ユーザーの要望。並列で実装するため |
+| 11/5 | `audit_logs` に result、`staff` に kana と position、`staff_events` に cancelled_at を足す。Next.js の Cache Components は使わない | 基盤の実装（docs/tasks/00-foundation.md の「決めたこと」） |
