@@ -21,6 +21,7 @@
     "prebuild": "npm run apps:gen"
   },
   "dependencies": {
+    "@anthropic-ai/sdk": "^1.6.0",
     "@modelcontextprotocol/sdk": "^1.32.2",
     "drizzle-orm": "^0.45.4",
     "next": "16.4.5",

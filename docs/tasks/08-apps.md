@@ -52,6 +52,27 @@
 ### テスト
 - [x] 暗号化（往復、改ざん、付け替え）、文書の読み書きと上限、共有（共有 → やめるとすぐに見えない、共有し直すと過去の文書も見える）、他人の文書に触れない、MCP の拒否、監査ログ（本文とニックネームを残さない）、DB に平文が残らない、`apps:check`
 
+### 基盤を広げる（11/6。spec.md §7「アプリが使える能力」）
+先方（Heart Closet）がアプリを作れるよう、まず開発キットを作り直して渡す。先方のアプリの開発には、こちらは手を出さない。
+
+開発キット（先に渡す）
+- [ ] 型（`types.ts`）: manifest の `display` / `pwa` / `storage` / `ai`、AI の仕事、`useAppAI` / `useAppAssets` の結果、`removeAll`
+- [ ] AI の処理の共通部分（`src/domain/apps/ai-core.ts`）: 仕事と入力からリクエストを組み立て、公式の SDK で呼び、返事を zod で確かめる。クライアントを差し替えられる（テストでは本物の API を呼ばない）。キットにもコピーする
+- [ ] キットの SDK: `useAppAI`（同意の画面のまね、画像を縮める）、`useAppAssets`、`removeAll`
+- [ ] キットの試す画面: AI の中継（Vite の開発サーバー。キーは `.env` の `ANTHROPIC_API_KEY`）、素材の配信、全画面の表示、AI の同意
+- [ ] `apps:check`: manifest の新しい値、`ai.ts` の import と返事の形、素材の種類と大きさ、CSS Modules、SVG の名前空間の URL
+- [ ] ひな形、`apps/CLAUDE.md`、キットの README / CLAUDE.md / skill を新しい能力に合わせる
+- [ ] zip に `.env` が入らないこと。空のディレクトリに展開して、install、check、typecheck、build、ヘッドレスのブラウザで確かめる
+
+本体（受け取ったアプリを組み込む前に必要）
+- [ ] SDK のフック（`useAppAI`、`useAppAssets`、`removeAll`）と、それを受ける API
+- [ ] AI の同意（版つき）と使用の記録のテーブル、アプリごとの月の費用の上限、利用者ごとと全体の回数の上限
+- [ ] 素材を `public/app-assets/` に写して配信する（`apps:gen`）
+- [ ] 全画面の表示（右上の小さなボタン）、アプリごとの Web App Manifest
+- [ ] 引き継ぎコード
+- [ ] 利用者の画面の下の説明を、AI を使うアプリでは変える
+- [ ] 件数の上限を manifest で変えられるようにする
+
 ## 決めたこと
 - spec.md §7 のとおり（能力は個人の保存とお寺との共有だけ、利用者は匿名だけ、アプリはリポジトリの中の React）
 - コードの名前: アプリは `apps/<app-id>/`、ドメイン層は `src/domain/apps/`、SDK は `src/apps-sdk/`、テーブルは `app_*`、利用者の画面は `/apps`、cookie は `tera_apps`（パス `/apps`）
