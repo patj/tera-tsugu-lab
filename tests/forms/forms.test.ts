@@ -30,7 +30,6 @@ import { createTanaka, createYamada, horokuInput, jushokuActor, type TestHouseho
 let seed: SeedContext;
 let staff: Actor;
 let yamada: TestHousehold;
-let tanaka: TestHousehold;
 
 async function rejects(p: Promise<unknown>, re: RegExp) {
   await assert.rejects(p, (e: Error) => {
@@ -54,7 +53,7 @@ describe("フォームの作成と編集", () => {
     seed = await resetDb();
     staff = await jushokuActor(seed);
     yamada = await createYamada(seed.templeId);
-    tanaka = await createTanaka(seed.templeId);
+    await createTanaka(seed.templeId);
   });
   it("設問の構造を検証する", () => {
     assert.throws(() => validateFormDraft(horokuInput({ title: "" })), /題名を入力/);
@@ -124,7 +123,7 @@ describe("集計と CSV", () => {
     seed = await resetDb();
     staff = await jushokuActor(seed);
     yamada = await createYamada(seed.templeId);
-    tanaka = await createTanaka(seed.templeId);
+    await createTanaka(seed.templeId);
     form = await createForm(
       staff,
       horokuInput({
