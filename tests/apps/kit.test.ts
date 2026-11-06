@@ -1,10 +1,11 @@
 // 開発キット（kit/、npm run kit:build）が本体とそろっているか。spec.md §7「開発キット」
 // 本体の SDK を変えたら、キットの sdk/storage.tsx もそろえる（このテストが落ちて知らせる）
 import assert from "node:assert/strict";
-import { existsSync, readFileSync, rmSync, writeFileSync } from "node:fs";
+import { existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
+import { tmpdir } from "node:os";
 import path from "node:path";
 import { after, before, describe, it } from "node:test";
-import { buildKit } from "../../scripts/build-kit";
+import { buildKit, installKit } from "../../scripts/build-kit";
 import { check, ROOT } from "../../scripts/apps";
 
 const OUT = path.join(ROOT, "dist/kit-test");
@@ -51,5 +52,42 @@ describe("開発キット", () => {
 
   it("キットの中のひな形は、決まりのチェックを通る", async () => {
     assert.deepEqual(await check(OUT, { registry: false }), []);
+  });
+
+  it("--into: キットを作り、新しくするときは作っているアプリ、.env、node_modules を残す", () => {
+    const parent = mkdtempSync(path.join(tmpdir(), "kit-into-"));
+    try {
+      const dest = path.join(parent, "temple-app-kit");
+      assert.equal(installKit(dest, OUT), "created");
+      assert.ok(existsSync(path.join(dest, "sdk/types.ts")));
+      // 作っているアプリ、キー、依存、古いキットにだけあったファイル
+      mkdirSync(path.join(dest, "apps/my-app"), { recursive: true });
+      writeFileSync(path.join(dest, "apps/my-app/App.tsx"), "// mine\n");
+      writeFileSync(path.join(dest, ".env"), "ANTHROPIC_API_KEY=mine\n");
+      mkdirSync(path.join(dest, "node_modules/x"), { recursive: true });
+      writeFileSync(path.join(dest, "sdk/old-file.ts"), "// old\n");
+      writeFileSync(path.join(dest, "apps/_template/old.tsx"), "// old\n");
+
+      assert.equal(installKit(dest, OUT), "updated");
+      assert.equal(readFileSync(path.join(dest, "apps/my-app/App.tsx"), "utf8"), "// mine\n");
+      assert.equal(readFileSync(path.join(dest, ".env"), "utf8"), "ANTHROPIC_API_KEY=mine\n");
+      assert.ok(existsSync(path.join(dest, "node_modules/x")));
+      assert.ok(!existsSync(path.join(dest, "sdk/old-file.ts")), "古いキットのファイルは消す");
+      assert.ok(!existsSync(path.join(dest, "apps/_template/old.tsx")), "ひな形も新しくする");
+      assert.ok(existsSync(path.join(dest, "apps/_template/App.tsx")));
+    } finally {
+      rmSync(parent, { recursive: true, force: true });
+    }
+  });
+
+  it("--into: キットでないフォルダーには書き込まない", () => {
+    const dest = mkdtempSync(path.join(tmpdir(), "kit-into-other-"));
+    try {
+      writeFileSync(path.join(dest, "important.txt"), "keep\n");
+      assert.throws(() => installKit(dest, OUT), /開発キットのフォルダーではない/);
+      assert.equal(readFileSync(path.join(dest, "important.txt"), "utf8"), "keep\n");
+    } finally {
+      rmSync(dest, { recursive: true, force: true });
+    }
   });
 });
