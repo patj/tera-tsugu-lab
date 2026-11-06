@@ -1,7 +1,7 @@
 // 台本の場面 3 を MCP のツールで通す: create_form → confirm_action → 個別リンクと共通リンクからの回答 → get_form_results
 import assert from "node:assert/strict";
 import { after, beforeEach, describe, it } from "node:test";
-import { eq } from "drizzle-orm";
+import { and, eq } from "drizzle-orm";
 import { closeDb, db } from "@/db/client";
 import { auditLogs, forms } from "@/db/schema";
 import type { SeedContext } from "@/db/seed/context";
@@ -90,7 +90,7 @@ describe("MCP: 行事・アンケートフォーム（場面 3）", () => {
     assert.equal(result.status, "受付中");
     assert.equal(result.household_links, 2);
     assert.equal(result.public_url, `http://localhost:3000/f/${formId}`);
-    const [audit] = await db.select().from(auditLogs).where(eq(auditLogs.action, "forms.create"));
+    const [audit] = await db.select().from(auditLogs).where(and(eq(auditLogs.action, "forms.create"), eq(auditLogs.target, `form:${formId}`)));
     assert.equal(audit.channel, "mcp");
 
     // 3. 山田さんが個別リンクから、家族を選んで祈願の主旨だけを入力する

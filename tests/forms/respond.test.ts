@@ -225,7 +225,7 @@ describe("回答する側", () => {
       source: "portal",
       answers: { [list]: [{ personId: yamada.members.hanako, values: { f5: "厄除け" } }] },
     });
-    const [row] = await db.select().from(formResponses);
+    const [row] = await db.select().from(formResponses).where(eq(formResponses.formId, form.id));
     assert.equal(row.personId, yamada.members.hanako);
     assert.equal(row.householdId, yamada.id);
     assert.equal(row.respondentName, "山田 花子");
