@@ -1,11 +1,12 @@
 // MCP のツールの結果とプレビュー（どちらも LLM に送られる）に、返さないと決めた情報が入らないことを確かめる（spec.md §4「LLM に渡す情報」）。
-// シードの連絡先（住所の番地、電話、携帯、メール）、生年月日、自由記述（対応記録の本文、申し込みの連絡事項、施設の予約の内容、台帳のメモ）を集め、
+// シードの連絡先（住所の番地、電話、携帯、メール）、生年月日、自由記述（対応記録の本文、申し込みの連絡事項、施設の予約の内容、台帳のメモ）、
+// フォームの回答の値（選択肢の文字は集計に出るので除く）を集め、
 // 読み取りのツールと書き込みのツールのプレビューを一通り呼んで、どの文字列も結果に出てこないことを見る。
 // ドメイン層が作る文（注意やチェックのメッセージ）から漏れる場合も、ここで見つかる。
 import assert from "node:assert/strict";
 import { after, before, describe, it } from "node:test";
 import { closeDb, db } from "@/db/client";
-import { contactLogs, contacts, households, memorialRequests, persons, reservations } from "@/db/schema";
+import { contactLogs, contacts, formQuestions, formResponses, households, memorialRequests, persons, reservations } from "@/db/schema";
 import type { SeedContext } from "@/db/seed/context";
 import { getStaffById, staffActor } from "@/domain/core";
 import type { ToolContext } from "@/mcp/framework/define";
@@ -55,6 +56,19 @@ async function collectSecrets(): Promise<[string, string][]> {
   for (const l of await db.select().from(contactLogs)) list.push(["対応記録の本文", l.body]);
   for (const r of await db.select().from(memorialRequests)) list.push(["申し込みの連絡事項", r.notes]);
   for (const r of await db.select().from(reservations)) list.push(["施設の予約の内容", r.notes]);
+  // フォームの回答: 文字列の値をすべて集める（選択肢の文字は集計に出るので除く）
+  const options = new Set<string>();
+  for (const q of await db.select().from(formQuestions)) {
+    for (const o of q.options ?? []) options.add(o);
+    for (const f of q.itemFields ?? []) for (const o of f.options ?? []) options.add(o);
+  }
+  const walk = (v: unknown): void => {
+    if (typeof v === "string") {
+      if (!options.has(v)) list.push(["フォームの回答", v]);
+    } else if (Array.isArray(v)) v.forEach(walk);
+    else if (v && typeof v === "object") Object.values(v).forEach(walk);
+  };
+  for (const r of await db.select().from(formResponses)) walk(r.answers);
   return list.filter((x): x is [string, string] => typeof x[1] === "string" && x[1].trim().length >= 4);
 }
 
@@ -67,7 +81,7 @@ describe("MCP のツールは、返さないと決めた情報を LLM に返さ�
     secrets = await collectSecrets();
     // 確かめる値がシードに十分あること（シードが変わって空振りしないように）
     const kinds = new Set(secrets.map(([what]) => what));
-    for (const k of ["世帯の電話", "携帯", "生年月日", "対応記録の本文", "施設の予約の内容"]) assert.ok(kinds.has(k), `シードに${k}がない`);
+    for (const k of ["世帯の電話", "携帯", "生年月日", "対応記録の本文", "施設の予約の内容", "フォームの回答"]) assert.ok(kinds.has(k), `シードに${k}がない`);
   });
   after(async () => {
     await closeDb();
@@ -131,12 +145,33 @@ describe("MCP のツールは、返さないと決めた情報を LLM に返さ�
     assert.match(preview.preview as string, /武蔵野市本町/);
   });
 
-  it("カレンダー: get_staff_calendar（自宅・墓前の法要の予定の内容に入る住所を返さない）", async () => {
+  it("カレンダー: 自宅・墓前の法要の予定の内容に入る住所を返さない", async () => {
     const cal = await call("get_staff_calendar", { from: "2026-11-01", to: "2026-12-31" });
     assertNoSecrets("get_staff_calendar", cal);
     const memorials = (cal.events as Obj[]).filter((e) => e["法要"] === true);
     assert.ok(memorials.length > 0);
     assert.ok(memorials.every((e) => e["内容"] === undefined && /\/admin\/memorial\/services\//.test(e["管理画面"] as string)));
+
+    assertNoSecrets("check_staff_availability", await call("check_staff_availability", { from: "2026-12-01", to: "2026-12-31" }));
+    // 自宅の法要（2026-12-19 10:00、副住職）と重なる予定のプレビュー。重なりの警告に法要の予定の内容を出さない
+    const p = await call("create_staff_event", {
+      title: "打ち合わせ",
+      category: "来客",
+      start: "2026-12-19 10:00",
+      end: "2026-12-19 11:00",
+      assignees: ["副住職"],
+    });
+    assert.equal(p.status, "needs_confirmation");
+    assert.match(p.preview as string, /別の予定があります/);
+    assertNoSecrets("create_staff_event のプレビュー", p);
+  });
+
+  it("フォーム: get_form_results（集計だけを返し、回答の値を返さない）", async () => {
+    const list = await call("get_form_results", {});
+    assertNoSecrets("get_form_results（一覧）", list);
+    const r = await call("get_form_results", { title: "花まつり" });
+    assertNoSecrets("get_form_results", r);
+    assert.ok(r.responses);
   });
 
   it("施設: check_facility_availability、list_reservations、承認とお断りのプレビュー", async () => {
