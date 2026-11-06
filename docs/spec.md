@@ -338,7 +338,8 @@ apps/            # お寺のアプリ（apps/<app-id>/）
 - **使いすぎの対策**（匿名で、だれでも新しい利用者になれるため、利用者ごとの上限だけでは足りない）
   - アプリごとの**月の費用の上限**（返ってきた使用トークン数と料金表から計算する。運用者が設定。上限を超えたら、その月はそのアプリの AI を止める）
   - 利用者ごとの 1 日の回数の上限（manifest の `ai.dailyLimit`。初期値 20、最大 100）と、基盤全体の 1 分あたりの回数の上限
-- **記録**: 基盤は、送った内容と返事を保存せず、ログにも出さない。残すのは、使った日時、アプリ、利用者、仕事の名前、トークン数、結果の種類（成功、断られた、上限など）だけ
+- **記録**: 基盤は、送った内容と返事を保存せず、ログにも出さない。残すのは、使った日時、アプリ、利用者、仕事の名前、トークン数、結果の種類（成功、断られた、上限など）だけ（`app_ai_usage`）。運用者は管理画面（`/admin/apps`）で、アプリごとの今月の回数と費用を見られる
+- **運用者の設定**（環境変数）: `ANTHROPIC_API_KEY`、`APPS_AI_MONTHLY_BUDGET_USD`（アプリごとの月の費用の上限。初期値 10 ドル）、`APPS_AI_BUDGETS_USD`（アプリごとに変えるとき。JSON）、`APPS_AI_GLOBAL_PER_MINUTE`（全体の 1 分あたりの回数。初期値 60）
 - **アプリが必ず扱う失敗**: 同意がない、上限、断られた、使えない（キーがない、混み合っている、通信できない）、返事の形が正しくない。どれでもアプリが止まらないようにする（例: Heart Closet は辞書で服を選ぶ）
 
 #### 素材
@@ -466,7 +467,7 @@ apps/<app-id>/
 - iframe の sandbox での隔離（外部への送信を仕組みで止める）
 - 檀家ポータルのアカウントでの利用
 - オフライン、プッシュ通知、AI の画像生成、課金、大きなデータの分けた読み込み（上の「検討して採らなかった案」）
-- AI の月の費用の上限の金額
+- AI の月の費用の上限の金額（今は初期値 10 ドル。実際の金額は運用を始めるときに決める）、上限を管理画面で変える仕組み
 - 文書単位の共有、スタッフからの返信
 - アプリのデータの形が変わったときの移行（今は、アプリが古い形も読めるように書く）
 
@@ -509,10 +510,12 @@ apps/<app-id>/
 | `form_responses` | form_id, household_id?, person_id?（ポータルから申し込んだ人）, respondent_name?, contact?, answers（jsonb）, source（portal / member_link / public） |
 | `pending_actions` | confirmation_id, tool, payload, preview, expires_at, executed_at |
 | `audit_logs` | actor, channel（web / mcp / portal）, action, target, summary, result（ok / needs_confirmation / error）, created_at |
-| ※ 以下 3 つはお寺のアプリ（§7） | |
+| ※ 以下 5 つはお寺のアプリ（§7） | |
 | `app_users` | nickname, created_at（匿名の利用者） |
 | `app_documents` | user_id, app_id, ciphertext（文書の JSON を暗号化したもの）, created_at, updated_at |
 | `app_consents` | user_id, app_id, shared, changed_at（お寺との共有の設定。履歴として追記していく） |
+| `app_ai_consents` | user_id, app_id, version, agreed, changed_at（AI に送ることへの同意。説明の版つきの履歴） |
+| `app_ai_usage` | user_id, app_id, task, model, result, input_tokens, output_tokens, cache_read_tokens, cache_write_tokens, cost_micro_usd, created_at（AI の使用の記録。送った内容と返事は持たない） |
 
 ## 10. ハッカソンの実装範囲
 

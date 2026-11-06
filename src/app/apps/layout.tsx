@@ -20,7 +20,7 @@ export default async function AppsLayout({ children }: LayoutProps<"/apps">) {
       </header>
       <div className="mx-auto w-full max-w-xl flex-1 px-4 py-6">{children}</div>
       <footer className="mx-auto w-full max-w-xl px-4 pb-8 text-base text-stone-600">
-        データは暗号化して保存します。「お寺と共有する」にしたアプリのデータだけを、お寺の方が読みます。AI には渡しません。
+        データは暗号化して保存します。「お寺と共有する」にしたアプリのデータだけを、お寺の方が読みます。AI を使うアプリでは、同意したときだけ、入力した内容を AI（Anthropic 社の Claude）に送ります（このシステムには保存しません）。
       </footer>
     </div>
   );

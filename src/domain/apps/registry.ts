@@ -1,6 +1,6 @@
 // お寺のアプリの一覧（npm run apps:gen が生成した registry を使う）
 import { APP_DEFINITIONS } from "@/apps-sdk/registry.generated";
-import type { AppDefinition, AppManifest } from "@/apps-sdk/types";
+import type { AppAITask, AppDefinition, AppManifest } from "@/apps-sdk/types";
 import { invalid, notFound } from "../core/errors";
 
 let apps: AppDefinition[] = APP_DEFINITIONS;
@@ -29,4 +29,11 @@ export function getSharingApp(appId: string): AppManifest {
   const m = getApp(appId);
   if (!m.sharing) throw invalid("このアプリは、お寺との共有に対応していません");
   return m;
+}
+
+/** AI の仕事（manifest に ai があり、ai.ts に仕事があるときだけ） */
+export function findAppAiTask(appId: string, task: string): { manifest: AppManifest; task: AppAITask } | undefined {
+  const def = apps.find((a) => a.manifest.id === appId);
+  if (!def?.manifest.ai || !def.ai || !Object.hasOwn(def.ai, task)) return undefined;
+  return { manifest: def.manifest, task: def.ai[task] };
 }

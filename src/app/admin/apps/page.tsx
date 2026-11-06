@@ -1,7 +1,7 @@
 // お寺のアプリ（管理画面）: アプリの一覧と、お寺と共有している利用者の一覧。spec.md §7
 import Link from "next/link";
 import { formatJst } from "@/domain/core";
-import { listApps, listSharedAppUsers } from "@/domain/apps";
+import { getAppAiUsageSummary, listApps, listSharedAppUsers } from "@/domain/apps";
 import { getStaffActor } from "@/lib/staff-auth";
 
 export const metadata = { title: "お寺のアプリ" };
@@ -9,7 +9,8 @@ export const metadata = { title: "お寺のアプリ" };
 export default async function AdminAppsPage() {
   const actor = await getStaffActor();
   const apps = listApps();
-  const users = await listSharedAppUsers(actor);
+  const [users, aiUsage] = await Promise.all([listSharedAppUsers(actor), getAppAiUsageSummary(actor)]);
+  const aiKeySet = Boolean(process.env.ANTHROPIC_API_KEY);
 
   return (
     <div className="text-lg">
@@ -55,6 +56,41 @@ export default async function AdminAppsPage() {
           </tbody>
         </table>
       </section>
+
+      {aiUsage.length > 0 && (
+        <section className="mt-10">
+          <h2 className="text-xl font-bold">AI の使用（今月）</h2>
+          <p className="mt-1 text-base text-stone-600">
+            利用者が同意したときだけ、アプリが渡した内容を Claude に送ります（内容は保存しません）。費用は使用したトークン数からのおおよその額です。
+            上限に達すると、そのアプリの AI は月末まで止まります（環境変数 APPS_AI_MONTHLY_BUDGET_USD / APPS_AI_BUDGETS_USD）。
+            {!aiKeySet && <strong className="text-red-800"> API キー（ANTHROPIC_API_KEY）が設定されていないため、AI は使えません。</strong>}
+          </p>
+          <table className="mt-3 w-full border-collapse bg-white">
+            <thead>
+              <tr className="border-b border-stone-300 text-left text-base text-stone-600">
+                <th className="px-3 py-2">アプリ</th>
+                <th className="px-3 py-2">モデル</th>
+                <th className="px-3 py-2">回数</th>
+                <th className="px-3 py-2">うち失敗</th>
+                <th className="px-3 py-2">費用 / 上限（米ドル）</th>
+              </tr>
+            </thead>
+            <tbody>
+              {aiUsage.map((u) => (
+                <tr key={u.appId} className="border-b border-stone-200">
+                  <td className="px-3 py-3">{u.appName}</td>
+                  <td className="px-3 py-3 text-base">{u.model}</td>
+                  <td className="px-3 py-3 text-base">{u.calls} 回</td>
+                  <td className="px-3 py-3 text-base">{u.failures} 回</td>
+                  <td className={`px-3 py-3 text-base ${u.costUsd >= u.budgetUsd ? "font-bold text-red-800" : ""}`}>
+                    ${u.costUsd.toFixed(4)} / ${u.budgetUsd.toFixed(2)}
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </section>
+      )}
 
       <section className="mt-10">
         <h2 className="text-xl font-bold">アプリ（{apps.length} 件）</h2>

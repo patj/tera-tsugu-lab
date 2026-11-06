@@ -29,7 +29,7 @@ description: 「お寺のアプリ」（apps/<app-id>/。日記、占い、写�
 5. `App.tsx`: 利用者の画面（`"use client"`）。`useAppStorage<型>()` の `docs` / `create` / `update` / `remove` で読み書きする。`error` を画面に出す。日時は `timeZone: "Asia/Tokyo"` を付けて表示する
 6. `Admin.tsx`: `sharing: true` のとき。共有された文書を表示するだけ。`sharing: false` なら消してよい
 7. `SharingPanel.tsx`: `sharing: true` のとき、共有のボタンをアプリに合った文言とデザインにする（`useAppSharing`）。**オンにする前に、何が共有されるかを必ず説明する**。共有の操作がいらなければ、App.tsx から外して消してよい（利用者は帯のリンクから設定できる）。`sharing: false` なら消す
-8. AI を使うなら `ai.ts`: `defineAppAI` で仕事を宣言する（指示は固定の文、返事の形は `z.object`、選択肢は `z.enum`）。App.tsx では `useAppAI<typeof ai>()` の `run()` を使い、失敗のすべての種類で止まらないようにする（本体の AI の中継は準備中で、今は `unavailable` が返る。docs/tasks/08-apps.md）
+8. AI を使うなら `ai.ts`: `defineAppAI` で仕事を宣言する（指示は固定の文、返事の形は `z.object`、選択肢は `z.enum`）。App.tsx では `useAppAI<typeof ai>()` の `run()` を使い、失敗のすべての種類で止まらないようにする（本体では、運用者のキーで Claude を呼ぶ。キーがないときは `unavailable` が返る）
 9. 素材があれば `assets/` に置き、`useAppAssets()` の `url()` / `dataUrl()` で使う（SVG は不可）。アプリ専用の CSS は `*.module.css`
 10. `README.md`: 目的、だれ向けか、文書の形、画面、共有や AI を使うか
 

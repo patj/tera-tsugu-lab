@@ -6,7 +6,7 @@
 import { createContext, useCallback, useContext, useMemo, useState, type ReactNode } from "react";
 import { AppAIProvider, type AppAITransport } from "./ai-client";
 import { AppAssetsProvider } from "./assets";
-import type { AppDocument, AppManifest, AppSharing, AppStorage } from "./types";
+import type { AppAIResult, AppDocument, AppManifest, AppSharing, AppStorage } from "./types";
 
 type StorageState = {
   docs: AppDocument[];
@@ -48,25 +48,55 @@ async function callApi(url: string, method: string, body?: unknown): Promise<{ o
   }
 }
 
-/** 本体の AI の送り先。本体の AI の中継（同意、上限、記録）はまだ作っていないので、準備中として返す（docs/tasks/08-apps.md） */
-const HOST_AI_TRANSPORT: AppAITransport = {
-  ready: false,
-  unavailableMessage: "AI は準備中です。しばらくお待ちください",
-  getConsent: async () => false,
-  setConsent: async () => false,
-  run: async () => ({ ok: false, kind: "unavailable", message: "AI は準備中です。しばらくお待ちください" }),
-};
+/** 本体の AI の送り先（/apps/api/<app-id>/ai/<仕事> と ai-consent。同意、上限、記録はサーバーが行う） */
+function hostAiTransport(appId: string): AppAITransport {
+  const base = `/apps/api/${encodeURIComponent(appId)}`;
+  const failed = (message?: string): AppAIResult<unknown> => ({
+    ok: false,
+    kind: "unavailable",
+    message: message ?? "AI につながりませんでした。時間をおいて、もう一度お試しください。",
+  });
+  return {
+    ready: true,
+    getConsent: async () => {
+      const r = await callApi(`${base}/ai-consent`, "GET");
+      return r.ok && (r.json as { consented?: boolean }).consented === true;
+    },
+    setConsent: async (version, agreed) => {
+      const r = await callApi(`${base}/ai-consent`, "PUT", { version, agreed });
+      return r.ok && (r.json as { consented?: boolean }).consented === true;
+    },
+    run: async (task, payload) => {
+      try {
+        const res = await fetch(`${base}/ai/${encodeURIComponent(task)}`, {
+          method: "POST",
+          credentials: "same-origin",
+          headers: { "Content-Type": "application/json", Accept: "application/json" },
+          body: JSON.stringify(payload),
+        });
+        const json = (await res.json().catch(() => null)) as { ok?: unknown; error?: string } | null;
+        if (json && typeof json.ok === "boolean") return json as AppAIResult<unknown>;
+        return failed(json?.error);
+      } catch {
+        return failed();
+      }
+    },
+  };
+}
 
 export function AppStorageProvider({
   appId,
   manifest,
   initialDocs,
+  initialAiConsent = false,
   sharing,
   children,
 }: {
   appId: string;
   manifest: AppManifest;
   initialDocs: AppDocument[];
+  /** 今の説明に、AI に送ることを同意しているか（サーバーで読んで渡す） */
+  initialAiConsent?: boolean;
   /** available: アプリがお寺との共有に対応しているか（manifest の sharing）。shared: 今の状態 */
   sharing: { available: boolean; shared: boolean };
   children: ReactNode;
@@ -123,6 +153,8 @@ export function AppStorageProvider({
     [base, call],
   );
 
+  const aiTransport = useMemo(() => hostAiTransport(appId), [appId]);
+
   const removeAll = useCallback(async () => {
     const r = await call(`${base}/docs`, "DELETE");
     if (!r) return false;
@@ -167,7 +199,7 @@ export function AppStorageProvider({
   return (
     <StorageContext.Provider value={value}>
       <AppAssetsProvider baseUrl={`/app-assets/${encodeURIComponent(appId)}`}>
-        <AppAIProvider manifest={manifest} transport={HOST_AI_TRANSPORT} initialConsent={false}>
+        <AppAIProvider manifest={manifest} transport={aiTransport} initialConsent={initialAiConsent}>
           {children}
         </AppAIProvider>
       </AppAssetsProvider>

@@ -7,3 +7,4 @@ export * from "./guard";
 export * from "./registry";
 export * from "./sharing";
 export * from "./users";
+export * from "./ai";

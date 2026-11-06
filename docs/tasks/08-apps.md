@@ -65,13 +65,13 @@
 - [x] zip に `.env` が入らないこと。空のディレクトリに展開して、install、check、typecheck、build。AI のアプリを作り、偽の Anthropic API（`ANTHROPIC_BASE_URL`）で、ヘッドレスのブラウザから同意 → 呼び出し → 結果、画像の縮小、素材、すべて消す、同意をやめる、を確かめた
 
 本体（受け取ったアプリを組み込む前に必要）
-- [x] SDK のフック: `useAppAssets`、`removeAll`（と `DELETE /apps/api/<app-id>/docs`）。`useAppAI` は形だけ（今は「準備中」の `unavailable` を返す）
+- [x] SDK のフック: `useAppAssets`、`removeAll`（と `DELETE /apps/api/<app-id>/docs`）。`useAppAI`（下の AI の中継を呼ぶ）
 - [x] 素材を `public/app-assets/` に写して配信する（`apps:gen`。git の管理外）
 - [x] 件数の上限を manifest で変えられるようにする
-- [ ] AI の中継: `/apps/api/<app-id>/ai/<仕事>`、同意（版つき）と使用の記録のテーブル、アプリごとの月の費用の上限、利用者ごとと全体の回数の上限、運用者の `ANTHROPIC_API_KEY`
+- [x] AI の中継: `/apps/api/<app-id>/ai/<仕事>` と `ai-consent`、同意（版つき。`app_ai_consents`）と使用の記録（`app_ai_usage`）、アプリごとの月の費用の上限、利用者ごとの 1 日と全体の 1 分あたりの回数の上限、運用者の `ANTHROPIC_API_KEY`。帯に同意の状態と「やめる」。管理画面に今月の回数と費用
 - [ ] 全画面の表示（右上の小さなボタン）、アプリごとの Web App Manifest
 - [ ] 引き継ぎコード
-- [ ] 利用者の画面の下の説明を、AI を使うアプリでは変える
+- [x] 利用者の画面の下の説明を変える（AI を使うアプリでは、同意したときだけ送ることを書く。今はすべての画面で同じ文）
 
 ## 決めたこと
 - spec.md §7 のとおり（能力は個人の保存とお寺との共有だけ、利用者は匿名だけ、アプリはリポジトリの中の React）
@@ -91,6 +91,11 @@
 - Opus 5.5 / Sonnet 5.5 は server-side fallback（`fallbacks: "default"`、`server-side-fallback-2026-07-01`）を付ける。Haiku 5.5 は付けない。thinking と temperature は送らず、effort を必ず送る（初期値 low）
 - 本物の Claude API で 1 回確かめた（11/6、運用者の承認を得て。`dist/real-api-check.ts`）: Sonnet 5.5 に、構造化出力（enum を含む）、effort: low、`fallbacks: "default"` とその beta ヘッダー、画像（PNG）、SDK の認証の形で送り、成功した（入力 604 / 出力 61 トークン、約 $0.0018）。返事は zod の確かめも通った。Opus 5.5 と Haiku 5.5、キットの試す画面からの本物の呼び出しは、まだ確かめていない
 - キットの AI の中継は `preview/ai-middleware.ts` を Vite の `ssrLoadModule` で読み込む（`vite.config.mts` から sdk/ を直接 import すると、Vite の設定の読み込み方の注意が出るため）
+
+- AI の中継の上限は、呼ぶ前に `app_ai_usage` に pending の行を入れて数える。数えてから入れるまでを、お寺ごとの advisory lock で 1 つずつにする（同時に呼ばれても上限を超えない。テストで確かめた）。入力が正しくないものは数えない。費用は返ってきたトークン数と料金表（`ai-server.ts`）からのおおよその額（100 万分の 1 米ドル）
+- 同意の API は、利用者に見せた説明の版を受け取り、今の説明と違えば同意を受け付けない（古い画面のまま同意させない）
+- 上限の設定は環境変数（`APPS_AI_MONTHLY_BUDGET_USD`、`APPS_AI_BUDGETS_USD`、`APPS_AI_GLOBAL_PER_MINUTE`）。管理画面で変える仕組みはハッカソン後
+- 確認: テスト（`tests/apps/ai-relay.test.ts`。Claude は差し替え）と、起動中の本体の画面で、同意 → 記録 → 読み直しても同意、サーバーでの入力の確かめ、帯の「やめる」、監査ログ。本体の画面から本物の Claude は呼んでいない（中の処理は 11/6 に本物の API で確かめたものと同じ）
 
 ## 残っていること
 - 最初のアプリを作り、ブラウザで useAppStorage の操作を確かめる（`docs/apps-guide.md` の手順で）
