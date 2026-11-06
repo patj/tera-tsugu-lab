@@ -1,3 +1,7 @@
 node_modules/
 dist/
 .DS_Store
+# Claude の API キーを入れるファイル（共有しない）
+.env
+.env.*
+!.env.example

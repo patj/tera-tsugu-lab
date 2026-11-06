@@ -2,6 +2,6 @@
 
 import type { AppDefinition } from "./types";
 
-/** お寺のアプリの manifest（ドメイン層が使う） */
+/** お寺のアプリの manifest と AI の仕事（ドメイン層が使う） */
 export const APP_DEFINITIONS: AppDefinition[] = [
 ];

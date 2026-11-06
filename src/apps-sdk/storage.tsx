@@ -4,7 +4,9 @@
 // 本体のページが AppStorageProvider で囲み、最初の文書と共有の状態を渡す。保存と共有の変更は /apps/api/<app-id>/ を通る
 // （サーバーで、cookie の利用者とアプリの ID を確かめ、暗号化して保存する。共有の変更は履歴と監査ログに残る）。
 import { createContext, useCallback, useContext, useMemo, useState, type ReactNode } from "react";
-import type { AppDocument, AppSharing, AppStorage } from "./types";
+import { AppAIProvider, type AppAITransport } from "./ai-client";
+import { AppAssetsProvider } from "./assets";
+import type { AppDocument, AppManifest, AppSharing, AppStorage } from "./types";
 
 type StorageState = {
   docs: AppDocument[];
@@ -13,6 +15,7 @@ type StorageState = {
   create: (data: unknown) => Promise<AppDocument | null>;
   update: (id: string, data: unknown) => Promise<AppDocument | null>;
   remove: (id: string) => Promise<boolean>;
+  removeAll: () => Promise<boolean>;
   clearError: () => void;
   sharing: SharingState;
 };
@@ -45,13 +48,24 @@ async function callApi(url: string, method: string, body?: unknown): Promise<{ o
   }
 }
 
+/** 本体の AI の送り先。本体の AI の中継（同意、上限、記録）はまだ作っていないので、準備中として返す（docs/tasks/08-apps.md） */
+const HOST_AI_TRANSPORT: AppAITransport = {
+  ready: false,
+  unavailableMessage: "AI は準備中です。しばらくお待ちください",
+  getConsent: async () => false,
+  setConsent: async () => false,
+  run: async () => ({ ok: false, kind: "unavailable", message: "AI は準備中です。しばらくお待ちください" }),
+};
+
 export function AppStorageProvider({
   appId,
+  manifest,
   initialDocs,
   sharing,
   children,
 }: {
   appId: string;
+  manifest: AppManifest;
   initialDocs: AppDocument[];
   /** available: アプリがお寺との共有に対応しているか（manifest の sharing）。shared: 今の状態 */
   sharing: { available: boolean; shared: boolean };
@@ -109,6 +123,13 @@ export function AppStorageProvider({
     [base, call],
   );
 
+  const removeAll = useCallback(async () => {
+    const r = await call(`${base}/docs`, "DELETE");
+    if (!r) return false;
+    setDocs([]);
+    return true;
+  }, [base, call]);
+
   const setShared = useCallback(
     async (next: boolean) => {
       if (!sharing.available) {
@@ -137,12 +158,21 @@ export function AppStorageProvider({
       create,
       update,
       remove,
+      removeAll,
       clearError: () => setError(null),
       sharing: { available: sharing.available, shared, pending: sharingPending, error: sharingError, setShared },
     }),
-    [docs, pending, error, create, update, remove, sharing.available, shared, sharingPending, sharingError, setShared],
+    [docs, pending, error, create, update, remove, removeAll, sharing.available, shared, sharingPending, sharingError, setShared],
   );
-  return <StorageContext.Provider value={value}>{children}</StorageContext.Provider>;
+  return (
+    <StorageContext.Provider value={value}>
+      <AppAssetsProvider baseUrl={`/app-assets/${encodeURIComponent(appId)}`}>
+        <AppAIProvider manifest={manifest} transport={HOST_AI_TRANSPORT} initialConsent={false}>
+          {children}
+        </AppAIProvider>
+      </AppAssetsProvider>
+    </StorageContext.Provider>
+  );
 }
 
 function useStorageContext(name: string): StorageState {

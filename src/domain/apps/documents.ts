@@ -3,7 +3,7 @@
 import { and, count, desc, eq } from "drizzle-orm";
 import { db } from "@/db/client";
 import { appDocuments } from "@/db/schema";
-import { APP_DOCUMENT_MAX_BYTES, APP_DOCUMENTS_MAX_PER_APP, type AppDocument } from "@/apps-sdk/types";
+import { APP_DOCUMENT_MAX_BYTES, appMaxDocs, type AppDocument } from "@/apps-sdk/types";
 import type { Actor } from "../core/actor";
 import { conflict, invalid, notFound } from "../core/errors";
 import { decryptAppData, encryptAppData } from "./crypto";
@@ -52,11 +52,11 @@ export async function listMyAppDocuments(actor: Actor, appId: string): Promise<A
 
 export async function createAppDocument(actor: Actor, appId: string, data: unknown): Promise<AppDocument> {
   assertAppUser(actor);
-  getApp(appId);
+  const max = appMaxDocs(getApp(appId));
   const json = serialize(data);
   return db.transaction(async (tx) => {
     const [{ n }] = await tx.select({ n: count() }).from(appDocuments).where(mine(actor, appId));
-    if (n >= APP_DOCUMENTS_MAX_PER_APP) throw conflict(`このアプリに保存できるのは ${APP_DOCUMENTS_MAX_PER_APP} 件までです。古いものを消してください`);
+    if (n >= max) throw conflict(`このアプリに保存できるのは ${max} 件までです。古いものを消してください`);
     const [row] = await tx
       .insert(appDocuments)
       .values({ templeId: actor.templeId, userId: actor.appUserId, appId, ciphertext: encryptAppData(json, actor.appUserId, appId) })
@@ -86,6 +86,14 @@ export async function deleteAppDocument(actor: Actor, appId: string, docId: stri
   if (!isUuid(docId)) throw notFound("文書が見つかりません");
   const rows = await db.delete(appDocuments).where(and(mine(actor, appId), eq(appDocuments.id, docId))).returning({ id: appDocuments.id });
   if (rows.length === 0) throw notFound("文書が見つかりません");
+}
+
+/** 自分の文書をすべて消す（このアプリの分だけ。物理削除。元に戻せない） */
+export async function deleteAllAppDocuments(actor: Actor, appId: string): Promise<number> {
+  assertAppUser(actor);
+  getApp(appId);
+  const rows = await db.delete(appDocuments).where(mine(actor, appId)).returning({ id: appDocuments.id });
+  return rows.length;
 }
 
 /** 自分の文書の件数（アプリの一覧に出す） */

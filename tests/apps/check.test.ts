@@ -1,10 +1,11 @@
 // お寺のアプリの規約のチェック（npm run apps:check）と一覧の生成
 import assert from "node:assert/strict";
 import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from "node:fs";
+import { deflateSync } from "node:zlib";
 import { tmpdir } from "node:os";
 import path from "node:path";
 import { describe, it } from "node:test";
-import { check, checkAppSources, checkManifest, checkSharingUsage, renderRegistry, ROOT } from "../../scripts/apps";
+import { check, checkAiTasks, checkAppSources, checkAssets, checkCapabilityUsage, checkManifest, checkSharingUsage, renderRegistry, ROOT } from "../../scripts/apps";
 
 function withTempApp(files: Record<string, string>, fn: (dir: string) => void) {
   const root = mkdtempSync(path.join(tmpdir(), "temple-apps-"));
@@ -25,7 +26,7 @@ describe("apps:check", () => {
 
   it("ひな形の manifest は正しく、共有を使う", async () => {
     const r = await checkManifest(path.join(ROOT, "apps/_template"), "_template");
-    assert.deepEqual(r, { problems: [], sharing: true });
+    assert.deepEqual(r, { problems: [], sharing: true, ai: false });
   });
 
   it("DB への直接のアクセス、外部への送信、端末への保存、ディレクトリの外の import を見つける", () => {
@@ -72,11 +73,115 @@ describe("apps:check", () => {
 
   it("一覧は静的な import を並べ、Admin.tsx があるアプリだけ Admin を載せる", () => {
     const { registry, views } = renderRegistry([
-      { id: "a-app", hasAdmin: true },
-      { id: "b-app", hasAdmin: false },
+      { id: "a-app", hasAdmin: true, hasAi: true },
+      { id: "b-app", hasAdmin: false, hasAi: false },
     ]);
     assert.match(registry, /apps\/a-app\/manifest/);
+    assert.match(registry, /import \{ ai as ai0 \} from "\.\.\/\.\.\/apps\/a-app\/ai"/);
+    assert.match(registry, /\{ manifest: manifest0, ai: ai0 \}/);
+    assert.match(registry, /\{ manifest: manifest1 \}/);
     assert.match(views, /"a-app": \{ App: App0, Admin: Admin0 \}/);
     assert.match(views, /"b-app": \{ App: App1 \}/);
   });
+
+  it("ai.ts は zod と @/apps-sdk だけを import でき、SVG の名前空間の URL は外部の URL にしない", () => {
+    withTempApp(
+      {
+        "ai.ts": `import { z } from "zod";\nimport { x } from "./helper";\nimport { readFileSync } from "node:fs";\n`,
+        "Draw.tsx": `const ns = "http://www.w3.org/2000/svg"; const xl = "http://www.w3.org/1999/xlink";\nexport default ns + xl;\n`,
+      },
+      (dir) => {
+        const m = checkAppSources(dir, "x-app").map((p) => `${p.file}: ${p.message}`);
+        assert.ok(m.some((x) => x.startsWith("ai.ts") && x.endsWith("./helper")), m.join(" / "));
+        assert.ok(m.some((x) => x.startsWith("ai.ts") && x.endsWith("node:fs")), m.join(" / "));
+        assert.ok(!m.some((x) => x.startsWith("Draw.tsx")), m.join(" / "));
+      },
+    );
+  });
+
+  it("CSS は *.module.css だけで、:global、@import、外部の URL を使えない", () => {
+    withTempApp(
+      {
+        "global.css": "body{color:red}",
+        "App.module.css": ":global(body){color:red}\n@import 'x.css';\n.a{background:url(https://example.com/x.png)}",
+        "App.tsx": `import "./global.css";\nimport s from "./App.module.css";\nexport default s;\n`,
+      },
+      (dir) => {
+        const m = checkAppSources(dir, "x-app").map((p) => `${p.file}: ${p.message}`).join(" / ");
+        for (const re of [/global\.css: CSS はアプリ専用/, /:global を使わない/, /@import/, /App\.module\.css: 外部の URL/, /App\.tsx: CSS は \*\.module\.css だけ/]) assert.match(m, re);
+      },
+    );
+  });
+
+  it("素材は決まった種類と大きさだけ（SVG は不可）", () => {
+    withTempApp({}, (dir) => {
+      mkdirSync(path.join(dir, "assets/img"), { recursive: true });
+      writeFileSync(path.join(dir, "assets/img/ok.webp"), "x");
+      writeFileSync(path.join(dir, "assets/img/bad.svg"), "<svg onload=alert(1)>");
+      writeFileSync(path.join(dir, "assets/run.js"), "alert(1)");
+      writeFileSync(path.join(dir, "assets/big.png"), Buffer.alloc(2 * 1024 * 1024 + 1));
+      const m = checkAssets(dir, "x-app").map((p) => `${p.file}: ${p.message}`).join(" / ");
+      assert.match(m, /bad\.svg: SVG は素材にできません/);
+      assert.match(m, /run\.js: 素材にできるのは/);
+      assert.match(m, /big\.png: 素材は 1 ファイル/);
+      assert.doesNotMatch(m, /ok\.webp/);
+      // assets/ の中の .js は、ソースとしてはチェックしない（素材としてだけ断る）
+      assert.equal(checkAppSources(dir, "x-app").length, 0);
+    });
+  });
+
+  it("manifest の新しい値（display、pwa、storage、ai）の範囲と、AI の宣言の食い違いを知らせる", async () => {
+    const root = mkdtempSync(path.join(ROOT, "dist", "check-"));
+    try {
+      const dir = path.join(root, "x-app");
+      mkdirSync(path.join(dir, "assets"), { recursive: true });
+      writeFileSync(path.join(dir, "assets/icon.png"), png(8, 8));
+      writeFileSync(
+        path.join(dir, "manifest.ts"),
+        `export const manifest = { id: "x-app", name: "x", description: "x", icon: "x", sharing: false, display: "full", pwa: { themeColor: "red", backgroundColor: "#fff", icon: "icon.png" }, storage: { maxDocs: 20000 }, ai: { purpose: "", sends: [], model: "gpt-4", dailyLimit: 500 } };\n`,
+      );
+      const m = await checkManifest(dir, "x-app");
+      const msgs = m.problems.map((p) => p.message).join(" / ");
+      for (const re of [/display/, /pwa\.themeColor/, /512×512/, /storage\.maxDocs/, /ai\.purpose/, /ai\.sends/, /ai\.model/, /ai\.dailyLimit/]) assert.match(msgs, re);
+      assert.equal(m.ai, true);
+      assert.match((await checkAiTasks(dir, "x-app", true)).map((p) => p.message).join(), /ai\.ts に AI の仕事を書いてください/);
+      writeFileSync(path.join(dir, "App.tsx"), `import { useAppAI } from "@/apps-sdk";\nexport default function App() { useAppAI(); return null; }\n`);
+      assert.match(checkCapabilityUsage(dir, "x-app", { sharing: false, ai: false }).map((p) => p.message).join(), /useAppAI を使うときは/);
+      writeFileSync(
+        path.join(dir, "ai.ts"),
+        `import { z } from "zod";\nimport { defineAppAI } from "@/apps-sdk";\nexport const ai = defineAppAI({ make: { instructions: "x", output: z.object({ r: z.record(z.string(), z.string()) }) } });\n`,
+      );
+      assert.match((await checkAiTasks(dir, "x-app", false)).map((p) => p.message).join(" / "), /manifest に ai.*JSON Schema にできません/);
+    } finally {
+      rmSync(root, { recursive: true, force: true });
+    }
+  });
 });
+
+/** 単色の PNG（テスト用） */
+function png(w: number, h: number): Buffer {
+  const crcTable = Array.from({ length: 256 }, (_, n) => {
+    let c = n;
+    for (let k = 0; k < 8; k++) c = c & 1 ? 0xedb88320 ^ (c >>> 1) : c >>> 1;
+    return c >>> 0;
+  });
+  const crc = (b: Buffer) => {
+    let c = 0xffffffff;
+    for (const x of b) c = crcTable[(c ^ x) & 0xff] ^ (c >>> 8);
+    return (c ^ 0xffffffff) >>> 0;
+  };
+  const chunk = (type: string, data: Buffer) => {
+    const t = Buffer.concat([Buffer.from(type), data]);
+    const len = Buffer.alloc(4);
+    len.writeUInt32BE(data.length);
+    const c = Buffer.alloc(4);
+    c.writeUInt32BE(crc(t));
+    return Buffer.concat([len, t, c]);
+  };
+  const ihdr = Buffer.alloc(13);
+  ihdr.writeUInt32BE(w, 0);
+  ihdr.writeUInt32BE(h, 4);
+  ihdr.set([8, 2, 0, 0, 0], 8);
+  const raw = Buffer.concat(Array.from({ length: h }, () => Buffer.concat([Buffer.from([0]), Buffer.alloc(w * 3, 0x88)])));
+  return Buffer.concat([Buffer.from([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a]), chunk("IHDR", ihdr), chunk("IDAT", deflateSync(raw)), chunk("IEND", Buffer.alloc(0))]);
+}

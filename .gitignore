@@ -21,6 +21,8 @@
 /build
 # 開発キットの組み立て先（npm run kit:build）
 /dist/
+# お寺のアプリの素材の配信先（npm run apps:gen が apps/<app-id>/assets から写す）
+/public/app-assets/
 
 # misc
 .DS_Store

@@ -19,20 +19,25 @@
 | 保存と暗号化 | アプリが `useAppStorage` で保存した文書を、暗号化して保存する。本人だけが読める |
 | お寺との共有 | `sharing: true` のアプリでは、利用者がアプリごとに「お寺と共有する / しない」を選べる。共有のボタンや文言はアプリが自由に作れる（`useAppSharing`）。どのアプリでも、画面の上の帯に今の状態と基盤の共有の設定へのリンクが出る。やめるとすぐにお寺から見えなくなる。変更の履歴と監査ログを残す |
 | スタッフの閲覧 | 共有された文書を、管理画面（`/admin/apps`）でアプリの Admin.tsx を使って表示する（読むだけ）。開くたびに監査ログに残す |
-| AI からの保護 | 利用者のデータは、MCP（Claude Desktop）や AI からは一切読めない |
+| AI | `ai` を宣言したアプリだけ、利用者が同意したときに、アプリが渡した入力を基盤のサーバーから Claude に送る（キーと費用は運用者。利用者ごとと全体の回数、アプリごとの月の費用に上限）。送った内容は保存もログもしない。**本体の AI の中継は準備中**（docs/tasks/08-apps.md） |
+| 素材、全画面、ホーム画面 | `assets/` の画像や音を配信する（SVG は不可）。全画面のアプリには右上の小さなボタンだけを出す。アプリごとの Web App Manifest を出す（準備中） |
+| MCP からの保護 | 利用者のデータは、MCP（Claude Desktop）からは一切読めない |
 
 ## 2. しくみ
 
 ```
 apps/<app-id>/            ← アプリを作る人が書く
-  manifest.ts             名前、説明、アイコン、共有を使うか
+  manifest.ts             名前、説明、アイコン、共有、画面の出し方、ホーム画面、保存の上限、AI
   App.tsx                 利用者の画面（useAppStorage で保存する）
   Admin.tsx               スタッフの画面（共有を使うときだけ）
+  ai.ts                   AI の仕事の宣言（AI を使うときだけ。サーバーで読み込まれる）
+  assets/                 素材（SVG は不可）
   README.md
 
 npm run apps:gen          → src/apps-sdk/*.generated.ts（アプリの一覧。自動生成）
 
-src/apps-sdk/             ← アプリが import できる唯一の窓口（useAppStorage、useAppSharing と型）
+src/apps-sdk/             ← アプリが import できる唯一の窓口（useAppStorage、useAppSharing、useAppAI、useAppAssets と型）
+                            ai-server.ts / ai-schema.ts は、AI の呼び出しの共通の処理（本体とキットで同じ）
 src/domain/apps/          ← 基盤: 保存、暗号化、共有の履歴、監査ログ
 src/app/apps/             ← 利用者の画面（/apps）と、文書の読み書きの API（/apps/api/<app-id>/docs）
 src/app/admin/apps/       ← スタッフの画面（/admin/apps）
@@ -91,11 +96,12 @@ npm run dev           # 起動中なら、かわりに npm run apps:gen
 npm run kit:build     # dist/temple-app-kit.zip ができる
 ```
 
-キットには、試す画面（本体に近い見た目。保存先はブラウザの中）、本体と同じ API の SDK、`apps:check`、ひな形、Claude Code の決まりと skill、お寺さん向けの `README.md` が入っている。
+キットには、試す画面（本体に近い見た目。保存先はブラウザの中。AI は試す画面のサーバーが本体と同じ処理で Claude を呼ぶ。キーはお寺さんの `.env`）、本体と同じ API の SDK、`apps:check`、ひな形、Claude Code の決まりと skill、お寺さん向けの `README.md` が入っている。`.env` は zip に入らない。
 
 送られてきたアプリ（`apps/<app-id>/` の zip）を組み込むとき:
 1. zip を展開し、`apps/<app-id>/` に置く（同じ ID のアプリがないことを確かめる）
-2. **コードを読む**: データの持ち出しや外部への送信がないか、共有をオンにする前に説明があるか、Admin.tsx に保存した内容だけを出しているか
+2. **コードを読む**: データの持ち出しや外部への送信がないか、共有をオンにする前に説明があるか、Admin.tsx に保存した内容だけを出しているか。AI を使うアプリでは、`ai.ts` の指示（利用者の入力を混ぜていないか、不適切な指示がないか）、`ai.sends` と `ai.purpose` が実際に送るものと合っているか、モデルと 1 日の回数（費用）、AI が失敗したときにアプリが止まらないか。素材の中身（大きさ、権利）
+   - 本体の AI の中継（同意、上限、記録）ができるまでは、AI を使うアプリは本体では AI なしで動く（`unavailable`）
 3. `npm run apps:gen`、`npm run apps:check`、`npm run typecheck`、`npm run lint`
 4. `npm run dev` で、上の「3-3. 確かめる」を本体で試す（日時の表示など、試す画面と違うところがないか）
 5. コミットする
@@ -103,9 +109,11 @@ npm run kit:build     # dist/temple-app-kit.zip ができる
 ## 4. `npm run apps:check` が見ること
 
 - 必要なファイル（manifest.ts、App.tsx、README.md。`sharing: true` なら Admin.tsx）がそろっている
-- manifest の `id` がディレクトリの名前と同じ。`name`、`description`、`icon`、`sharing` が書いてある
-- import が `@/apps-sdk`、`react`、`zod`、自分のディレクトリの中だけ
-- `fetch` などの外部への送信、外部の URL、`process.env`、`localStorage` や cookie、`eval`、`"use server"`、`dangerouslySetInnerHTML` を使っていない
+- manifest の `id` がディレクトリの名前と同じ。`name`、`description`、`icon`、`sharing` が書いてある。`display`、`pwa`（色、512×512 の PNG のアイコン）、`storage.maxDocs`、`ai`（purpose、sends、モデル、1 日の回数）の値の範囲
+- import が `@/apps-sdk`、`react`、`zod`、自分のディレクトリの中（と `*.module.css`）だけ。`ai.ts` は `zod` と `@/apps-sdk` だけ
+- `fetch` などの外部への送信、外部の URL（SVG の名前空間は除く）、`process.env`、`localStorage` や cookie、`eval`、`"use server"`、`dangerouslySetInnerHTML` を使っていない
+- `ai.ts` の仕事の形（指示、返事の形が JSON Schema にできるか、入力の上限）。manifest の `ai` と `ai.ts`、`useAppAI` の使い方が合っているか
+- 素材の種類（SVG は不可）と大きさ。CSS は `*.module.css` だけで、`:global`、`@import`、外部の URL を使っていない
 - アプリの一覧（`*.generated.ts`）が最新
 
 ## 5. まだできないこと（ハッカソン後）
@@ -113,6 +121,8 @@ npm run kit:build     # dist/temple-app-kit.zip ができる
 詳しくは spec.md §7 の「検討して採らなかった案」と「未決事項」。
 - 利用者が 1 件ずつお寺に送る（申し込み、回答、奉納など）
 - スタッフが管理画面で、アプリの内容（おみくじの文言、設問など）を編集する（今は内容をアプリのコードに書く）
-- 檀家ポータルのアカウントで使う、端末を変えたときの引き継ぎ
+- 檀家ポータルのアカウントで使う
+- オフライン、プッシュ通知、AI の画像生成、課金、大きなデータの分けた読み込み
+- 本体の AI の中継、全画面、ホーム画面、引き継ぎコードは準備中（docs/tasks/08-apps.md）
 - 下書きの状態（スタッフだけが試せる）、アプリの審査
 - アプリの隔離（iframe の sandbox）

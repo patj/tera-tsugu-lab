@@ -1,4 +1,6 @@
 // お寺のアプリ用の SDK（開発キット版）。アプリは、ここ（@/apps-sdk）だけを import できる（apps/CLAUDE.md）。
-// 型（types.ts）は本体と同じもの。useAppStorage / useAppSharing は本体と同じ形で、保存先だけがブラウザの中（試すためだけ）
+// 型（types.ts）、AI（ai-client.tsx）、素材（assets.tsx）は本体と同じもの。useAppStorage / useAppSharing は本体と同じ形で、保存先だけがブラウザの中（試すためだけ）
 export * from "./types";
 export { useAppSharing, useAppStorage } from "./storage";
+export { useAppAI } from "./ai-client";
+export { useAppAssets } from "./assets";

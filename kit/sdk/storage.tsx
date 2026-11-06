@@ -1,14 +1,28 @@
 "use client";
 
-// 開発キット版の useAppStorage / useAppSharing。形は本体と同じ（型は types.ts を共有）。
-// 本体はサーバーに暗号化して保存するが、キットではブラウザの localStorage に保存する（試すためだけ。アプリのコードは localStorage を使ってはいけない）。
-// 本体と同じように、JSON にできない値は JSON にした形で保存し、大きさと件数の上限、エラーの文を再現する。
+// 開発キット版の useAppStorage / useAppSharing と、AI・素材のつなぎ先。形は本体と同じ（型は types.ts を共有）。
+// - 文書と共有の状態: 本体はサーバーに暗号化して保存するが、キットではブラウザの localStorage に保存する（試すためだけ。アプリのコードは localStorage を使ってはいけない）
+//   本体と同じように、JSON にできない値は JSON にした形で保存し、大きさと件数の上限、エラーの文を再現する
+// - AI: 試す画面のサーバー（vite.config.mts の /__kit/ai/）が、本体と同じ処理（ai-server.ts）で Claude を呼ぶ
+// - 素材: 試す画面のサーバーが apps/<app-id>/assets/ をそのまま配信する
 import { createContext, useCallback, useContext, useMemo, useState, type ReactNode } from "react";
-import { APP_DOCUMENT_MAX_BYTES, APP_DOCUMENTS_MAX_PER_APP, type AppDocument, type AppSharing, type AppStorage } from "./types";
+import { AppAIProvider, type AppAITransport } from "./ai-client";
+import { AppAssetsProvider } from "./assets";
+import {
+  APP_DOCUMENT_MAX_BYTES,
+  appAIConsentVersion,
+  appMaxDocs,
+  type AppAIResult,
+  type AppDocument,
+  type AppManifest,
+  type AppSharing,
+  type AppStorage,
+} from "./types";
 
 export type PreviewData = { docs: AppDocument[]; shared: boolean };
 
 const key = (appId: string) => `temple-app-kit:${appId}`;
+const consentKey = (appId: string) => `temple-app-kit:${appId}:ai-consent`;
 
 export function loadPreviewData(appId: string): PreviewData {
   try {
@@ -26,6 +40,11 @@ function savePreviewData(appId: string, data: PreviewData): void {
 
 export function clearPreviewData(appId: string): void {
   localStorage.removeItem(key(appId));
+  localStorage.removeItem(consentKey(appId));
+}
+
+function loadConsent(manifest: AppManifest): boolean {
+  return Boolean(manifest.ai) && localStorage.getItem(consentKey(manifest.id)) === appAIConsentVersion(manifest);
 }
 
 class KitError extends Error {}
@@ -49,24 +68,46 @@ function serialize(data: unknown): unknown {
 /** 本体の通信の待ち時間に近づける */
 const wait = () => new Promise((r) => setTimeout(r, 150));
 
+/** 試す画面のサーバーを通して AI を呼ぶ（キーはサーバーの .env にだけある） */
+function kitAITransport(manifest: AppManifest): AppAITransport {
+  return {
+    ready: true,
+    getConsent: async (version) => localStorage.getItem(consentKey(manifest.id)) === version,
+    setConsent: async (version, agreed) => {
+      if (agreed) localStorage.setItem(consentKey(manifest.id), version);
+      else localStorage.removeItem(consentKey(manifest.id));
+      return agreed;
+    },
+    run: async (task, payload): Promise<AppAIResult<unknown>> => {
+      try {
+        const res = await fetch(`/__kit/ai/${encodeURIComponent(manifest.id)}/${encodeURIComponent(task)}`, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify(payload),
+        });
+        return (await res.json()) as AppAIResult<unknown>;
+      } catch {
+        return { ok: false, kind: "unavailable", message: "試す画面のサーバーにつながりませんでした（npm run dev を確かめてください）" };
+      }
+    },
+  };
+}
+
 type Ctx = { storage: AppStorage<unknown>; sharing: AppSharing };
 const StorageContext = createContext<Ctx | null>(null);
 
 /** 試す画面がアプリを囲む（本体の AppStorageProvider にあたる） */
-export function PreviewStorageProvider({
-  appId,
-  sharingAvailable,
-  children,
-}: {
-  appId: string;
-  sharingAvailable: boolean;
-  children: ReactNode;
-}) {
+export function PreviewStorageProvider({ manifest, assetsBaseUrl, children }: { manifest: AppManifest; assetsBaseUrl: string; children: ReactNode }) {
+  const appId = manifest.id;
+  const sharingAvailable = manifest.sharing;
+  const maxDocs = appMaxDocs(manifest);
   const [data, setData] = useState<PreviewData>(() => loadPreviewData(appId));
   const [pending, setPending] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [sharingPending, setSharingPending] = useState(false);
   const [sharingError, setSharingError] = useState<string | null>(null);
+  const transport = useMemo(() => kitAITransport(manifest), [manifest]);
+  const [initialConsent] = useState(() => loadConsent(manifest));
 
   const run = useCallback(
     async <R,>(fn: (cur: PreviewData) => { next: PreviewData; result: R }, failed: R): Promise<R> => {
@@ -92,14 +133,14 @@ export function PreviewStorageProvider({
     (input: unknown) =>
       run<AppDocument | null>((cur) => {
         const value = serialize(input);
-        if (cur.docs.length >= APP_DOCUMENTS_MAX_PER_APP) {
-          throw new KitError(`このアプリに保存できるのは ${APP_DOCUMENTS_MAX_PER_APP} 件までです。古いものを消してください`);
+        if (cur.docs.length >= maxDocs) {
+          throw new KitError(`このアプリに保存できるのは ${maxDocs} 件までです。古いものを消してください`);
         }
         const now = new Date().toISOString();
         const doc: AppDocument = { id: crypto.randomUUID(), createdAt: now, updatedAt: now, data: value };
         return { next: { ...cur, docs: [doc, ...cur.docs] }, result: doc };
       }, null),
-    [run],
+    [run, maxDocs],
   );
 
   const update = useCallback(
@@ -123,6 +164,8 @@ export function PreviewStorageProvider({
     [run],
   );
 
+  const removeAll = useCallback(() => run<boolean>((cur) => ({ next: { ...cur, docs: [] }, result: true }), false), [run]);
+
   const setShared = useCallback(
     async (shared: boolean) => {
       setSharingError(null);
@@ -143,7 +186,7 @@ export function PreviewStorageProvider({
 
   const value = useMemo<Ctx>(
     () => ({
-      storage: { docs: data.docs, pending, error, create, update, remove, clearError: () => setError(null) },
+      storage: { docs: data.docs, pending, error, create, update, remove, removeAll, clearError: () => setError(null) },
       sharing: {
         available: sharingAvailable,
         shared: data.shared,
@@ -153,9 +196,17 @@ export function PreviewStorageProvider({
         unshare: () => setShared(false),
       },
     }),
-    [data, pending, error, create, update, remove, sharingAvailable, sharingPending, sharingError, setShared],
+    [data, pending, error, create, update, remove, removeAll, sharingAvailable, sharingPending, sharingError, setShared],
   );
-  return <StorageContext.Provider value={value}>{children}</StorageContext.Provider>;
+  return (
+    <StorageContext.Provider value={value}>
+      <AppAssetsProvider baseUrl={assetsBaseUrl}>
+        <AppAIProvider manifest={manifest} transport={transport} initialConsent={initialConsent}>
+          {children}
+        </AppAIProvider>
+      </AppAssetsProvider>
+    </StorageContext.Provider>
+  );
 }
 
 function useCtx(name: string): Ctx {

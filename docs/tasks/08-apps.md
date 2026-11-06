@@ -56,22 +56,22 @@
 先方（Heart Closet）がアプリを作れるよう、まず開発キットを作り直して渡す。先方のアプリの開発には、こちらは手を出さない。
 
 開発キット（先に渡す）
-- [ ] 型（`types.ts`）: manifest の `display` / `pwa` / `storage` / `ai`、AI の仕事、`useAppAI` / `useAppAssets` の結果、`removeAll`
-- [ ] AI の処理の共通部分（`src/domain/apps/ai-core.ts`）: 仕事と入力からリクエストを組み立て、公式の SDK で呼び、返事を zod で確かめる。クライアントを差し替えられる（テストでは本物の API を呼ばない）。キットにもコピーする
-- [ ] キットの SDK: `useAppAI`（同意の画面のまね、画像を縮める）、`useAppAssets`、`removeAll`
-- [ ] キットの試す画面: AI の中継（Vite の開発サーバー。キーは `.env` の `ANTHROPIC_API_KEY`）、素材の配信、全画面の表示、AI の同意
-- [ ] `apps:check`: manifest の新しい値、`ai.ts` の import と返事の形、素材の種類と大きさ、CSS Modules、SVG の名前空間の URL
-- [ ] ひな形、`apps/CLAUDE.md`、キットの README / CLAUDE.md / skill を新しい能力に合わせる
-- [ ] zip に `.env` が入らないこと。空のディレクトリに展開して、install、check、typecheck、build、ヘッドレスのブラウザで確かめる
+- [x] 型（`types.ts`）: manifest の `display` / `pwa` / `storage` / `ai`、AI の仕事（`defineAppAI`）、`useAppAI` / `useAppAssets` の結果、`removeAll`、上限の定数、同意の版
+- [x] AI の処理の共通部分（`src/apps-sdk/ai-server.ts`、`ai-schema.ts`、`ai-client.tsx`、`image.ts`）: 仕事と入力からリクエストを組み立て、公式の SDK（`@anthropic-ai/sdk`）で呼び、返事を zod で確かめる。クライアントを差し替えられる。キットにもコピーする
+- [x] キットの SDK: `useAppAI`（基盤の同意の画面、画像を縮める）、`useAppAssets`、`removeAll`、件数の上限
+- [x] キットの試す画面: AI の中継（`preview/ai-middleware.ts`。キーは `.env` の `ANTHROPIC_API_KEY`）、素材の配信、全画面の表示（右上のボタン）、スマホの幅、AI の同意をやめる
+- [x] `apps:check`: manifest の新しい値、`ai.ts` の import と返事の形、素材の種類と大きさ（SVG は不可）、CSS Modules、SVG の名前空間の URL、`useAppAI` と manifest の `ai` の食い違い
+- [x] ひな形、`apps/CLAUDE.md`、キットの README / CLAUDE.md / skill、本体の skill と手順書を新しい能力に合わせる
+- [x] zip に `.env` が入らないこと。空のディレクトリに展開して、install、check、typecheck、build。AI のアプリを作り、偽の Anthropic API（`ANTHROPIC_BASE_URL`）で、ヘッドレスのブラウザから同意 → 呼び出し → 結果、画像の縮小、素材、すべて消す、同意をやめる、を確かめた
 
 本体（受け取ったアプリを組み込む前に必要）
-- [ ] SDK のフック（`useAppAI`、`useAppAssets`、`removeAll`）と、それを受ける API
-- [ ] AI の同意（版つき）と使用の記録のテーブル、アプリごとの月の費用の上限、利用者ごとと全体の回数の上限
-- [ ] 素材を `public/app-assets/` に写して配信する（`apps:gen`）
+- [x] SDK のフック: `useAppAssets`、`removeAll`（と `DELETE /apps/api/<app-id>/docs`）。`useAppAI` は形だけ（今は「準備中」の `unavailable` を返す）
+- [x] 素材を `public/app-assets/` に写して配信する（`apps:gen`。git の管理外）
+- [x] 件数の上限を manifest で変えられるようにする
+- [ ] AI の中継: `/apps/api/<app-id>/ai/<仕事>`、同意（版つき）と使用の記録のテーブル、アプリごとの月の費用の上限、利用者ごとと全体の回数の上限、運用者の `ANTHROPIC_API_KEY`
 - [ ] 全画面の表示（右上の小さなボタン）、アプリごとの Web App Manifest
 - [ ] 引き継ぎコード
 - [ ] 利用者の画面の下の説明を、AI を使うアプリでは変える
-- [ ] 件数の上限を manifest で変えられるようにする
 
 ## 決めたこと
 - spec.md §7 のとおり（能力は個人の保存とお寺との共有だけ、利用者は匿名だけ、アプリはリポジトリの中の React）
@@ -86,6 +86,11 @@
 - 共有の操作はアプリが自由に作れる（`useAppSharing`、`/apps/api/<app-id>/sharing`）。基盤は履歴と監査ログ、帯の状態とリンクだけを守る。オンにする前の説明はアプリの責任（spec.md §7、11/6 の決定ログ）。帯の状態はクライアントの部品（`SharingStatus`）にし、アプリが共有を変えると同時に変わる。`sharing: false` のアプリで `useAppSharing` を使うと `apps:check` が知らせる
 
 - 開発キットの案内書は、ファイル名を `README.md` にした（日本語のファイル名は、zip を Windows で展開すると文字化けするおそれがあるため）。見出しを「はじめにお読みください」にする
+
+- AI の返事の形は、SDK の `zodOutputFormat` を使わず、`z.toJSONSchema` から作る（`zodOutputFormat` は enum まで説明に移すため。SDK 1.6.0 で確かめた）。長さや範囲は説明に移し、基盤が zod で確かめる
+- Opus 5.5 / Sonnet 5.5 は server-side fallback（`fallbacks: "default"`、`server-side-fallback-2026-07-01`）を付ける。Haiku 5.5 は付けない。thinking と temperature は送らず、effort を必ず送る（初期値 low）
+- 本物の Claude API はまだ呼んでいない（この PC にキーがないため）。リクエストの形は、偽の API で確かめた
+- キットの AI の中継は `preview/ai-middleware.ts` を Vite の `ssrLoadModule` で読み込む（`vite.config.mts` から sdk/ を直接 import すると、Vite の設定の読み込み方の注意が出るため）
 
 ## 残っていること
 - 最初のアプリを作り、ブラウザで useAppStorage の操作を確かめる（`docs/apps-guide.md` の手順で）

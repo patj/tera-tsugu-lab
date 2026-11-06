@@ -11,6 +11,7 @@ import { getStaffById, staffActor, type Actor } from "@/domain/core";
 import {
   countMyAppDocuments,
   createAppDocument,
+  deleteAllAppDocuments,
   deleteAppDocument,
   getAppSharing,
   listMyAppDocuments,
@@ -102,6 +103,31 @@ describe("文書", () => {
       return true;
     });
     await rejects(createAppDocument(hana, "no-such-app", {}), "not_found");
+  });
+});
+
+describe("すべて消す・件数の上限", () => {
+  it("すべて消すのは、自分の、そのアプリの文書だけ", async () => {
+    await createAppDocument(hana, DIARY, { n: 1 });
+    await createAppDocument(hana, DIARY, { n: 2 });
+    await createAppDocument(hana, FORTUNE, "大吉");
+    await createAppDocument(taro, DIARY, { n: 3 });
+    assert.equal(await deleteAllAppDocuments(hana, DIARY), 2);
+    assert.equal((await listMyAppDocuments(hana, DIARY)).length, 0);
+    assert.equal((await listMyAppDocuments(hana, FORTUNE)).length, 1);
+    assert.equal((await listMyAppDocuments(taro, DIARY)).length, 1);
+    await rejects(deleteAllAppDocuments(staff, DIARY), "forbidden");
+  });
+
+  it("件数の上限は manifest の storage.maxDocs で決まる", async () => {
+    setAppsForTesting([{ manifest: { ...TEST_APPS[0].manifest, storage: { maxDocs: 2 } } }, TEST_APPS[1]]);
+    try {
+      await createAppDocument(hana, DIARY, { n: 1 });
+      await createAppDocument(hana, DIARY, { n: 2 });
+      await rejects(createAppDocument(hana, DIARY, { n: 3 }), "conflict", /2 件まで/);
+    } finally {
+      setAppsForTesting(TEST_APPS);
+    }
   });
 });
 

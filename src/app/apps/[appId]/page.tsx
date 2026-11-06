@@ -16,7 +16,7 @@ export default async function AppPage({ params }: PageProps<"/apps/[appId]">) {
   const { App } = views;
   return (
     <main>
-      <AppStorageProvider appId={appId} initialDocs={docs} sharing={{ available: manifest.sharing, shared }}>
+      <AppStorageProvider appId={appId} manifest={manifest} initialDocs={docs} sharing={{ available: manifest.sharing, shared }}>
         <BackLink href="/apps">アプリの一覧へ</BackLink>
         <div className="mb-6 flex flex-wrap items-center justify-between gap-3">
           <h1 className="text-2xl font-bold leading-snug">

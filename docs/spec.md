@@ -451,12 +451,12 @@ apps/<app-id>/
 - 開発キット（`npm run kit:build` → `dist/temple-app-kit.zip`。元は `kit/`）
   - 試す画面（`npm run dev`。Vite）: アプリを本体に近い見た目で動かす。「利用者の画面」（帯、共有の状態と切り替え、App.tsx）と「スタッフの画面」（共有されているときの Admin.tsx）
   - SDK（`@/apps-sdk`）: 本体と同じ API。保存先だけがブラウザの中（localStorage。試すためだけ）。上限とエラーの文も本体と同じにする
-  - AI: 試す画面のサーバー（Vite の開発サーバー）が、本体と同じ処理（`src/domain/apps/ai-core.ts` をコピーしたもの）で Claude を呼ぶ。キーは、試す人（お寺）が自分のキーをキットの `.env` の `ANTHROPIC_API_KEY` に入れる（ブラウザには渡さない。`VITE_` を付けない）。キーがなければ「使えない」の失敗を返す
+  - AI: 試す画面のサーバー（Vite の開発サーバー）が、本体と同じ処理（`src/apps-sdk/ai-server.ts` をコピーしたもの）で Claude を呼ぶ。キーは、試す人（お寺）が自分のキーをキットの `.env` の `ANTHROPIC_API_KEY` に入れる（ブラウザには渡さない。`VITE_` を付けない）。キーがなければ「使えない」の失敗を返す
   - 素材、全画面、ホーム画面の設定も、本体と同じように試せる（ホーム画面への追加そのものは試せない）
   - `npm run apps:check`（本体と同じ決まりのチェック）、`npm run typecheck`
   - `README.md`（人向けの「はじめにお読みください」）、`CLAUDE.md`（キットでの読み替え）、`apps/CLAUDE.md`（本体と同じ決まり）、skill `new-temple-app`（キット版）、ひな形
   - DB、Docker、本体のほかの機能、データは入れない
-- **本体とずれないようにする**: `src/apps-sdk/types.ts`、`src/domain/apps/ai-core.ts`、`scripts/apps.ts`、`apps/_template/`、`apps/CLAUDE.md` は、`kit:build` のときに本体からコピーする。キットの `.env` は zip に入れない。キットの SDK の実装（`kit/sdk/storage.tsx`）だけは別に書くので、本体の SDK を変えたらそろえる（`tests/apps/kit.test.ts` が、export の名前とコピーが同じかを確かめる）
+- **本体とずれないようにする**: `src/apps-sdk/` の `types.ts`、`ai-schema.ts`、`ai-server.ts`、`ai-client.tsx`、`assets.tsx`、`image.ts`、`scripts/apps.ts`、`apps/_template/`、`apps/CLAUDE.md` は、`kit:build` のときに本体からコピーする。キットの `.env` は zip に入れない。キットの SDK の実装（`kit/sdk/storage.tsx`）だけは別に書くので、本体の SDK を変えたらそろえる（`tests/apps/kit.test.ts` が、export の名前とコピーが同じかを確かめる）
 - **受け取り**: お寺は `apps/<app-id>/` を zip で送る。運用者は、`apps/` に置いて、人がコードを読み（データの持ち出し、外部への送信、共有の前の説明）、`npm run apps:gen`、`apps:check`、`typecheck`、`lint` を通し、本体の画面で試してからコミットする（手順は `docs/apps-guide.md`）
 - 試す画面と本体の違い: 試す画面はブラウザだけで動く（サーバーでの描画がない）。日時の表示などは、本体で試してから公開する
 
