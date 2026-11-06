@@ -5,6 +5,7 @@
 // このファイルは、開発キット（kit/）にもそのままコピーされる（npm run kit:build）。@/apps-sdk/* は、本体では src/apps-sdk、キットでは sdk を指す
 import { cpSync, existsSync, mkdirSync, readdirSync, readFileSync, rmSync, statSync, writeFileSync } from "node:fs";
 import path from "node:path";
+import { pathToFileURL } from "node:url";
 import { taskProblems } from "@/apps-sdk/ai-schema";
 import {
   APP_AI_LIMITS,
@@ -199,7 +200,8 @@ export async function checkManifest(appDir: string, app: string): Promise<Manife
   const add = (message: string) => problems.push({ app, file: "manifest.ts", message });
   let manifest: Record<string, unknown> | undefined;
   try {
-    manifest = (await import(path.join(appDir, "manifest.ts"))).manifest;
+    // Windows の C:\... のパスでも読めるよう、file:// の URL にして import する
+    manifest = (await import(pathToFileURL(path.join(appDir, "manifest.ts")).href)).manifest;
   } catch (e) {
     add(`manifest.ts を読み込めません: ${(e as Error).message}`);
     return { problems, sharing: false, ai: false };
@@ -266,7 +268,7 @@ export async function checkAiTasks(appDir: string, app: string, declared: boolea
   if (!declared) add("ai.ts を使うときは、manifest に ai（purpose と sends）を書いてください");
   let tasks: unknown;
   try {
-    tasks = (await import(file)).ai;
+    tasks = (await import(pathToFileURL(file).href)).ai;
   } catch (e) {
     add(`ai.ts を読み込めません: ${(e as Error).message}`);
     return problems;

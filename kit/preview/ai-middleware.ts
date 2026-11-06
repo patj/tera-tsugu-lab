@@ -38,6 +38,25 @@ export async function handleAiRequest(req: IncomingMessage, res: ServerResponse,
     res.end(JSON.stringify(body));
   };
   if (req.method !== "POST") return send({ ok: false, kind: "invalid_input", message: "POST で送ってください" });
+  // ほかのサイトから、試す人のキーで AI を呼ばせない（本体の API と同じ決まり）:
+  // JSON だけを受け付け（ほかのサイトのフォームや text/plain の送信を断る）、Origin があれば同じホストに限る
+  if (!(req.headers["content-type"] ?? "").includes("application/json")) {
+    res.statusCode = 415;
+    return send({ ok: false, kind: "invalid_input", message: "JSON で送ってください" });
+  }
+  const origin = req.headers.origin;
+  if (origin) {
+    let sameHost = false;
+    try {
+      sameHost = new URL(origin).host === req.headers.host;
+    } catch {
+      sameHost = false;
+    }
+    if (!sameHost) {
+      res.statusCode = 403;
+      return send({ ok: false, kind: "unavailable", message: "このページからは送れません" });
+    }
+  }
   const [appId, task] = (req.url ?? "").replace(/^\//, "").split("?")[0].split("/").map(decodeURIComponent);
   if (!appId || !task || !SAFE_ID.test(appId) || !SAFE_ID.test(task)) return send({ ok: false, kind: "invalid_input", message: "アプリか仕事の名前が正しくありません" });
   let manifest: AppManifest;
