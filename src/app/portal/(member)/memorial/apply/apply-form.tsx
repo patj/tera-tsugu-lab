@@ -4,7 +4,7 @@
 import { useState } from "react";
 import type { MemorialApplyOptions } from "@/domain/portal";
 import { PortalForm } from "../../../_components/portal-form";
-import { inputClass } from "../../../_components/ui";
+import { inputClass } from "../../../_components/styles";
 
 const radioClass = "flex items-center gap-3 rounded-lg border border-stone-300 bg-white px-4 py-3";
 

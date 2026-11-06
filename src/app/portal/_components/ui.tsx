@@ -4,7 +4,7 @@ import type { ReactNode } from "react";
 import { formatJst, jstParts } from "@/domain/core";
 import { LOCATION_LABELS, REQUEST_STATUS_LABELS, type MemorialLocation, type MemorialRequestStatus } from "@/domain/portal";
 
-export const inputClass = "mt-2 block w-full rounded-lg border border-stone-300 bg-white px-4 py-3 text-lg";
+export { inputClass } from "./styles";
 
 export function PageTitle({ children, back = "/portal" }: { children: ReactNode; back?: string | null }) {
   return (

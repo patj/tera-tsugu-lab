@@ -5,7 +5,7 @@
 import { useState } from "react";
 import type { RespondentForm, RespondentItemField, RespondentQuestion } from "@/domain/forms";
 import { PortalForm } from "../../../_components/portal-form";
-import { inputClass } from "../../../_components/ui";
+import { inputClass } from "../../../_components/styles";
 
 type PersonRow = { personId: string; values: Record<string, string> };
 type Value = string | string[] | PersonRow[];
