@@ -382,11 +382,12 @@ function generatedHouseholds(): SeedHousehold[] {
 
     // 故人: 3 世帯に 1 つは 1 人、ほかは 2 人。5 世帯に 1 つは祖父も
     const deceasedCount = (i % 3 === 0 ? 1 : 2) + (i % 5 === 0 ? 1 : 0);
-    const deceasedRoles: { role: string; relation: string; gender: "male" | "female" }[] = [
+    const allRoles: { role: string; relation: string; gender: "male" | "female" }[] = [
       { role: "father", relation: "父", gender: "male" },
       { role: "mother", relation: "母", gender: "female" },
       { role: "grandfather", relation: "祖父", gender: "male" },
-    ].slice(0, deceasedCount);
+    ];
+    const deceasedRoles = allRoles.slice(0, deceasedCount);
     for (const d of deceasedRoles) {
       const [g, gk] = pick(d.gender === "male" ? DECEASED_MALE : DECEASED_FEMALE);
       const death = d.role === "grandfather" ? date(1976, 1995) : date(1996, 2025);
