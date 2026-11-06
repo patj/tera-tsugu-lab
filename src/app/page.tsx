@@ -11,6 +11,16 @@ export default function Home() {
             管理画面（スタッフ）
           </Link>
         </li>
+        <li>
+          <Link className="underline" href="/portal">
+            檀家ポータル
+          </Link>
+        </li>
+        <li>
+          <Link className="underline" href="/reserve">
+            施設の空き状況と利用の申請
+          </Link>
+        </li>
       </ul>
     </main>
   );

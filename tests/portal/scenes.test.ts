@@ -111,7 +111,7 @@ describe("場面 5: 田中家の窓口が、ポータルから法要を申し込
     assert.equal(listed[0].targets[0].kaikiName, "三回忌");
     assert.equal(listed[0].service, null);
 
-    // 7. 住職が日時を確定する（04 の bookMemorialService の代わり）
+    // 7. 住職が日時を確定する（04 の bookMemorialService）
     const startAt = jst("2027-03-27", "10:00");
     const serviceId = await bookDirectly(seed, id, { startAt });
 
@@ -123,7 +123,7 @@ describe("場面 5: 田中家の窓口が、ポータルから法要を申し込
       assert.equal(s.confirmed[0].id, serviceId);
       assert.equal(s.confirmed[0].startAt.getTime(), startAt.getTime());
       assert.equal(s.confirmed[0].location, "temple");
-      assert.equal(s.confirmed[0].officiantName, "高橋 日照");
+      assert.equal(s.confirmed[0].officiantName, "住職 高橋 日照");
       assert.deepEqual(s.confirmed[0].targets.map((t) => `${t.name} ${t.kaikiName}`), ["田中 和子 三回忌"]);
       // 確定済みの年忌は、目安から消える
       assert.ok(!s.upcoming.some((u) => u.name === "田中 和子" && u.kaiki === 3));
@@ -188,7 +188,9 @@ describe("場面 5: 田中家の窓口が、ポータルから法要を申し込
     await bad({ location: "hall" }, /場所/);
     await bad({ attendees: 0 }, /人数/);
     await bad({ notes: "あ".repeat(1001) }, /連絡事項/);
-    assert.equal((await db.select().from(memorialRequests)).length, 1);
+    // 法要のシード（04）がほかの家の申し込みも入れるので、田中家の分だけを数える
+    const tanaka = seed.get("household:tanaka");
+    assert.equal((await db.select().from(memorialRequests).where(eq(memorialRequests.householdId, tanaka))).length, 1);
   });
 });
 

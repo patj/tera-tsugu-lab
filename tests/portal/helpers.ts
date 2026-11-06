@@ -1,10 +1,8 @@
 // ポータルのテストの部品
 import assert from "node:assert/strict";
-import { eq } from "drizzle-orm";
-import { db } from "@/db/client";
-import { memorialRequests, memorialServices, memorialServiceTargets } from "@/db/schema";
 import type { SeedContext } from "@/db/seed/context";
 import { DomainError, getStaffById, staffActor, type Actor } from "@/domain/core";
+import { bookMemorialService } from "@/domain/memorial";
 import { consumeLoginLink, getPortalAccount, requestLoginLink, toPortalActor } from "@/domain/portal";
 
 export async function staffOf(seed: SeedContext, key = "staff:jushoku"): Promise<Actor> {
@@ -35,41 +33,18 @@ export const rejects = (p: Promise<unknown>, code: string, re?: RegExp) =>
     return true;
   });
 
-/**
- * 04 の bookMemorialService の代わり（04 はまだこの worktree にない）。
- * 申し込みから法要を確定したことにする: memorial_services と対象を作り、申し込みを scheduled にする
- */
+/** 住職（または指定したスタッフ）が、申し込みから法要を確定する（04 の bookMemorialService を使う） */
 export async function bookDirectly(
   seed: SeedContext,
   requestId: string,
-  input: { startAt: Date; officiant?: string; location?: string },
+  input: { startAt: Date; officiant?: string },
 ): Promise<string> {
-  const [req] = await db.select().from(memorialRequests).where(eq(memorialRequests.id, requestId));
-  assert.ok(req);
-  const [svc] = await db
-    .insert(memorialServices)
-    .values({
-      templeId: req.templeId,
-      householdId: req.householdId,
-      seshuPersonId: req.seshuPersonId,
-      seshuName: req.seshuName,
-      location: input.location ?? req.location,
-      startAt: input.startAt,
-      durationMin: 40,
-      officiantStaffId: seed.get(input.officiant ?? "staff:jushoku"),
-    })
-    .returning({ id: memorialServices.id });
-  for (const t of req.targets) {
-    await db.insert(memorialServiceTargets).values({
-      templeId: req.templeId,
-      memorialServiceId: svc.id,
-      personId: t.personId,
-      kaiki: t.kaiki,
-    });
-  }
-  await db
-    .update(memorialRequests)
-    .set({ status: "scheduled", memorialServiceId: svc.id })
-    .where(eq(memorialRequests.id, requestId));
-  return svc.id;
+  const officiant = input.officiant ?? "staff:jushoku";
+  const actor = await staffOf(seed, officiant);
+  const r = await bookMemorialService(actor, {
+    memorialRequestId: requestId,
+    start: input.startAt,
+    officiantStaffId: seed.get(officiant),
+  });
+  return r.serviceId;
 }
