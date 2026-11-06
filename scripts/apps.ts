@@ -90,6 +90,14 @@ export function checkAppSources(appDir: string, app: string): Problem[] {
   return problems;
 }
 
+/** sharing: false のアプリが、お寺との共有の操作を使っていないか */
+export function checkSharingUsage(appDir: string, app: string, sharing: boolean): Problem[] {
+  if (sharing) return [];
+  return sourceFiles(appDir)
+    .filter((f) => /\buseAppSharing\b/.test(stripComments(readFileSync(f, "utf8"))))
+    .map((f) => ({ app, file: path.relative(appDir, f), message: "useAppSharing を使うときは、manifest の sharing を true にしてください" }));
+}
+
 /** manifest の中身（読み込んで確かめる） */
 export async function checkManifest(appDir: string, app: string): Promise<{ problems: Problem[]; sharing: boolean }> {
   const problems: Problem[] = [];
@@ -166,6 +174,7 @@ export async function check(root = ROOT): Promise<Problem[]> {
     if (existsSync(path.join(dir, "manifest.ts"))) {
       const m = await checkManifest(dir, app);
       problems.push(...m.problems);
+      problems.push(...checkSharingUsage(dir, app, m.sharing));
       if (m.sharing && !existsSync(path.join(dir, "Admin.tsx"))) {
         problems.push({ app, file: "Admin.tsx", message: "sharing: true のアプリには、スタッフの画面（Admin.tsx）が必要です" });
       }

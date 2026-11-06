@@ -26,12 +26,14 @@ description: 「お寺のアプリ」（apps/<app-id>/。日記、占い、写�
 4. `types.ts`: 文書の data の型を書く
 5. `App.tsx`: 利用者の画面（`"use client"`）。`useAppStorage<型>()` の `docs` / `create` / `update` / `remove` で読み書きする。`error` を画面に出す。日時は `timeZone: "Asia/Tokyo"` を付けて表示する
 6. `Admin.tsx`: `sharing: true` のとき。共有された文書を表示するだけ。`sharing: false` なら消してよい
-7. `README.md`: 目的、だれ向けか、文書の形、画面、共有を使うか
+7. `SharingPanel.tsx`: `sharing: true` のとき、共有のボタンをアプリに合った文言とデザインにする（`useAppSharing`）。**オンにする前に、何が共有されるかを必ず説明する**。共有の操作がいらなければ、App.tsx から外して消してよい（利用者は帯のリンクから設定できる）。`sharing: false` なら消す
+8. `README.md`: 目的、だれ向けか、文書の形、画面、共有を使うか
 
 ## 3. 守ること（apps/CLAUDE.md の要約）
 
 - import は `@/apps-sdk`、`react`、`zod`、自分のディレクトリの中だけ
 - データは `useAppStorage` だけで読み書きする（DB、cookie、localStorage などに触らない）。外部に送信しない（fetch、外部の URL）
+- 共有をオンにする前に、何が共有されるかを本人に説明する。説明なしに `share()` を呼ばない
 - `src/` などの本体のファイルは変えない
 
 ## 4. 確かめる
@@ -45,5 +47,5 @@ npm run lint
 
 最後に、相手に次を伝える。
 - `npm run dev` のあと（起動中なら `npm run apps:gen` のあと）、`/apps` で試せること（ニックネームで始め、作る・直す・消す）
-- `sharing: true` なら、アプリの画面の上の「共有の設定」で共有し、管理画面の「お寺のアプリ」（`/admin/apps`）で見え方を確かめられること
+- `sharing: true` なら、アプリの共有のボタン（または画面の上の「共有の設定」）で共有し、管理画面の「お寺のアプリ」（`/admin/apps`）で見え方を確かめられること
 - 公開の前に、人がコードを読み、`npm run apps:check` をもう一度流すこと

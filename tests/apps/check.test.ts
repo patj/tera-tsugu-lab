@@ -4,7 +4,7 @@ import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import path from "node:path";
 import { describe, it } from "node:test";
-import { check, checkAppSources, checkManifest, renderRegistry, ROOT } from "../../scripts/apps";
+import { check, checkAppSources, checkManifest, checkSharingUsage, renderRegistry, ROOT } from "../../scripts/apps";
 
 function withTempApp(files: Record<string, string>, fn: (dir: string) => void) {
   const root = mkdtempSync(path.join(tmpdir(), "temple-apps-"));
@@ -60,6 +60,13 @@ describe("apps:check", () => {
   it("コメントの中の言葉は問題にしない", () => {
     withTempApp({ "App.tsx": `// fetch( は使わない\nexport default function App() { return null; }\n` }, (dir) => {
       assert.deepEqual(checkAppSources(dir, "x-app"), []);
+    });
+  });
+
+  it("sharing: false のアプリで useAppSharing を使うと知らせる", () => {
+    withTempApp({ "App.tsx": `import { useAppSharing } from "@/apps-sdk";\nexport default function App() { useAppSharing(); return null; }\n` }, (dir) => {
+      assert.equal(checkSharingUsage(dir, "x-app", false).length, 1);
+      assert.equal(checkSharingUsage(dir, "x-app", true).length, 0);
     });
   });
 

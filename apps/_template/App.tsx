@@ -4,6 +4,7 @@
 // ひな形: 1 行のメモを作る・直す・消すだけの最小の例。作るアプリに合わせて書き換える
 import { useState } from "react";
 import { useAppStorage, type AppProps } from "@/apps-sdk";
+import { SharingPanel } from "./SharingPanel";
 import type { Note } from "./types";
 
 export default function App({ manifest }: AppProps) {
@@ -73,6 +74,7 @@ export default function App({ manifest }: AppProps) {
           </li>
         ))}
       </ul>
+      <SharingPanel />
     </div>
   );
 }
