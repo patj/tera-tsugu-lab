@@ -30,6 +30,9 @@ const MAX_EVENT_DAYS = 14;
 
 // ---- 入力の検証 ----
 
+const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+const isUuid = (s: unknown): s is string => typeof s === "string" && UUID_RE.test(s);
+
 function checkRange(start: Date, end: Date, maxDays: number, what: string) {
   if (!(start instanceof Date) || Number.isNaN(start.getTime()) || !(end instanceof Date) || Number.isNaN(end.getTime())) {
     throw invalid(`${what}の日時が正しくありません`);
@@ -67,6 +70,7 @@ function checkCategory(category: string, visibility: EventVisibility): EventCate
 async function checkAssignees(conn: DbOrTx, templeId: string, ids: string[]): Promise<string[]> {
   const unique = [...new Set(ids ?? [])];
   if (unique.length === 0) throw invalid("担当者を 1 人以上選んでください");
+  if (!unique.every(isUuid)) throw invalid("担当者に、このお寺のスタッフでない人が含まれています");
   const rows = await conn
     .select({ id: staff.id })
     .from(staff)
@@ -193,6 +197,7 @@ type EventRow = typeof staffEvents.$inferSelect;
 
 /** 書き換えてよい予定を読む。読めない・直せないときは、私的な予定の存在を明かさないように notFound にする */
 async function loadEditable(actor: Actor & { staffId: string }, eventId: string, conn: DbOrTx): Promise<EventRow> {
+  if (!isUuid(eventId)) throw notFound("予定が見つかりません");
   const [row] = await conn
     .select()
     .from(staffEvents)
@@ -402,7 +407,7 @@ export async function getCalendar(
 /** 1 件の予定（編集の画面）。内容を見られない予定（他人の私的な予定）は、存在を明かさずに notFound にする */
 export async function getEvent(actor: Actor, eventId: string, conn: DbOrTx = db): Promise<CalendarEventDetail> {
   const viewer = viewerOf(actor);
-  if (!/^[0-9a-f-]{36}$/i.test(eventId)) throw notFound("予定が見つかりません");
+  if (!isUuid(eventId)) throw notFound("予定が見つかりません");
   const [event] = await selectEvents(conn, actor.templeId, viewer, eq(staffEvents.id, eventId));
   if (!event || event.kind !== "detail") throw notFound("予定が見つかりません");
   return event;
@@ -441,8 +446,8 @@ export async function getStaffBusyIntervals(
   conn: DbOrTx = db,
 ): Promise<Record<string, Interval[]>> {
   const out: Record<string, Interval[]> = {};
-  const unique = [...new Set(staffIds)];
-  for (const id of unique) out[id] = [];
+  const unique = [...new Set(staffIds)].filter(isUuid);
+  for (const id of staffIds) out[id] = [];
   if (unique.length === 0 || range.from.getTime() >= range.to.getTime()) return out;
 
   const rows = await conn

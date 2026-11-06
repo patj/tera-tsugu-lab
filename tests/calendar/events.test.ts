@@ -272,6 +272,9 @@ describe("スタッフのカレンダー（ドメイン層）", () => {
         createSharedEvent(actors.jushokuWeb, db, { ...base, assigneeStaffIds: ["00000000-0000-0000-0000-000000000000"] }),
         /スタッフでない/,
       );
+      await assert.rejects(createSharedEvent(actors.jushokuWeb, db, { ...base, assigneeStaffIds: ["nope"] }), /スタッフでない/);
+      await assert.rejects(getEvent(actors.jushokuWeb, "nope"), /見つかりません/);
+      await assert.rejects(cancelEvent(actors.jushokuWeb, "nope"), /見つかりません/);
     });
 
     it("スタッフでない操作者（シードなど）が作ると、最初の担当者が作った人になる", async () => {
