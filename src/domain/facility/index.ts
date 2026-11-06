@@ -8,7 +8,9 @@
 // - getMainHallId(templeId) / listFacilities(templeId)         … 本堂の ID、施設の一覧（04）
 export * from "./availability";
 export * from "./constants";
+export * from "./dates";
 export * from "./facilities";
 export * from "./public";
+export * from "./register";
 export * from "./request-code";
 export * from "./reservations";

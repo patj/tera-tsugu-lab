@@ -17,7 +17,7 @@ import {
   KIND_LABELS,
   STATUS_LABELS,
   approveReservation,
-  createReservation,
+  registerReservation,
   findConcurrentReservations,
   findConflicts,
   findFacility,
@@ -34,7 +34,6 @@ import {
   type ReservationStatus,
   type ReservationWithParty,
 } from "@/domain/facility";
-import { createContact } from "@/domain/facility/ledger-adapter";
 import { defineReadTool, defineWriteTool, type ToolDef } from "../framework/define";
 
 const WEEKDAYS = ["日", "月", "火", "水", "木", "金", "土"];
@@ -226,20 +225,15 @@ const createReservationTool = defineWriteTool({
   },
   execute: async (args, { actor }) => {
     const { facility, start, end, status } = await resolveCreate(actor, args);
-    const r = await db.transaction(async (tx) => {
-      const contact = args.contact_name
-        ? await createContact(actor, tx, { name: args.contact_name, phone: args.contact_phone, email: args.contact_email })
-        : null;
-      return createReservation(actor, tx, {
-        facilityId: facility.id,
-        kind: args.kind,
-        status,
-        start,
-        end,
-        contactId: contact?.id,
-        title: args.title,
-        notes: args.notes,
-      });
+    const r = await registerReservation(actor, {
+      facilityId: facility.id,
+      kind: args.kind,
+      status,
+      start,
+      end,
+      title: args.title,
+      notes: args.notes,
+      contact: { name: args.contact_name, phone: args.contact_phone, email: args.contact_email },
     });
     const [w] = await withParty([r]);
     return present(w);
