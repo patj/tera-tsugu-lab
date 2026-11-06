@@ -8,3 +8,11 @@
 export * from "./types";
 export * from "./requests";
 export * from "./schedule";
+//
+// スタッフ（管理画面、MCP）が使うもの:
+//   verifyMemorial（年忌の検証）、findMemorialSlots（候補の日時）、planMemorialBooking / bookMemorialService（確定）、
+//   cancelMemorialService（取り消し。管理画面だけ）、listMemorialServices / getMemorialService、
+//   listMemorialRequests / getMemorialRequest / declineMemorialRequest
+export * from "./verify";
+export * from "./slots";
+export * from "./services";
