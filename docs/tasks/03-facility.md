@@ -60,6 +60,9 @@
 - [x] `create_reservation`（書き込み）
 - [x] `approve_reservation`（書き込み）
 - [x] `reject_reservation`（書き込み。理由が必須）
+- [ ] 件名と申請者の名前を LLM に返さない（spec.md §4「LLM に渡す情報」、11/6 の決定）
+  - `check_facility_availability` と `list_reservations`: 予約は目的（法要 / 前撮り / 茶会 / その他）と状態で表し、件名は返さない（件名があれば「あり」）
+  - `list_reservations` と、`create_reservation` / `approve_reservation` / `reject_reservation` のプレビュー: 申請者の名前は最初の 1 文字だけを残して伏せる。申請番号と URL を添える
 
 ### シード（`src/db/seed/facility.ts`）
 - [x] 施設: 本堂、東席、中席、西席、庭園（この順で `position`）
