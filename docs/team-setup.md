@@ -222,7 +222,7 @@ PowerShell を開いて、上の 2 行（`cd ~\tera-tsugu-lab` と `claude`）�
 
 **コミット**
 - コミットと push は `<リポジトリ>` でだけ行う（メンバーに頼まれたとき、または区切りのよいところで了承を得て）。`.env` が入っていないことを、`git status` で毎回確かめる（キットの `.gitignore` が外すが、念のため）
-- 本体（`~/tera-tsugu-lab`）ではコミットしない。`apps:try` のコピーは git に無視させているので、`git status` には出ない
+- 本体（`~/tera-tsugu-lab`）ではコミットしない。`apps:try` のコピーは git に無視させているので、`git status` には出ない。ただし、アプリの一覧（`src/apps-sdk/registry.generated.ts` と `views.generated.ts`）は、コピーを置いているあいだ `M` と出る。これは正常なので、元に戻さない（戻すと、次に `npm run dev` を起動し直すまで、`/apps/<app-id>` が見つからなくなる）
 
 **本体を最新にしたとき**
 - `git pull` が `untracked working tree files would be overwritten` と `apps/<app-id>/` で止まったら、開発者がそのアプリを本体に組み込んだということ。`npm run apps:untry -- <app-id>` でコピーを消してから、もう一度 `git pull` する。組み込まれたあとは `apps:try` がそのアプリを断るので、新しい版を本体で確かめたいときは、開発者に相談するようメンバーに伝える
