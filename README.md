@@ -4,6 +4,8 @@
 
 ## 起動
 
+チームのメンバーが Windows で試すときは [docs/team-setup.md](docs/team-setup.md)（Claude Code に準備と起動をまかせる手順書）を使う。
+
 必要なもの: Node.js 22 以上、Docker
 
 ```sh
