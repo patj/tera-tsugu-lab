@@ -26,6 +26,7 @@ import {
   type Interval,
 } from "@/domain/core";
 import { defineReadTool, defineWriteTool, type ToolContext, type ToolDef } from "../framework/define";
+import { adminUrl } from "../framework/present";
 
 const WEEKDAYS = ["日", "月", "火", "水", "木", "金", "土"];
 
@@ -114,8 +115,12 @@ function eventToOutput(e: CalendarEvent, me: string, names: Map<string, string>)
     種類: e.visibility === "shared" ? "業務の予定" : e.ownerStaffId === me ? "私的な予定（あなたの予定）" : "私的な予定",
     カテゴリ: e.category,
     タイトル: e.title,
-    ...(e.body ? { 内容: e.body } : {}),
-    ...(e.memorialServiceId ? { 法要: true } : {}),
+    // 法要の予定の内容には、自宅・墓前の住所が入る。LLM には返さず、法要の管理画面の URL を添える
+    ...(e.memorialServiceId
+      ? { 法要: true, 管理画面: adminUrl(`/admin/memorial/services/${e.memorialServiceId}`) }
+      : e.body
+        ? { 内容: e.body }
+        : {}),
   };
 }
 
@@ -123,7 +128,7 @@ const getStaffCalendar = defineReadTool({
   name: "get_staff_calendar",
   description:
     "期間（日付）とスタッフを指定して、スタッフのカレンダーの予定を返す。スタッフを省略すると全員。" +
-    "業務の予定は、時間、担当者、内容のすべてを返す。" +
+    "業務の予定は、時間、担当者、内容のすべてを返す（法要の予定だけは内容を返さず、法要の管理画面の URL を返す）。" +
     "他のスタッフの私的な予定は「予定あり」と時間だけを返す（内容は推測して伝えない）。操作者本人の私的な予定は内容まで返す。",
   input: {
     from: dateArg,

@@ -126,7 +126,12 @@ describe("台本の場面 1、2（MCP）", () => {
 
     // 5. get_household の直近の対応記録に出る
     const h2 = data(await runtime.call("get_household", { household_id: householdId }, ctx));
-    assert.equal((h2["直近の対応記録"] as Obj[])[0]["内容"], "和子さんの三回忌（2027 年）のご案内をした");
+    // 本文は LLM に返さない（日時、種類、記録者だけ。本文は管理画面で見る）
+    const latest = (h2["直近の対応記録"] as Obj[])[0];
+    assert.equal(latest["種類"], "案内");
+    assert.equal(latest["記録者"], "高橋 日照");
+    assert.equal(latest["内容"], undefined);
+    assert.match(h2["管理画面"] as string, new RegExp(`/admin/ledger/households/${householdId}$`));
   });
 
   it("add_contact_log: 知らない世帯や、決まっていない種類はエラーにする", async () => {

@@ -94,7 +94,10 @@ describe("施設予約の MCP ツール", () => {
     assert.equal(photo.施設, "本堂");
     assert.equal(photo.日時, "2026-12-06（日）09:00〜12:00");
     assert.equal(photo.申請者, "青木 美咲");
-    assert.equal(photo.電話, "090-1234-5678");
+    // 申請者の連絡先は LLM に返さない（管理画面の URL を添える）
+    assert.equal(photo.電話, undefined);
+    assert.ok(!JSON.stringify(list).includes("090-1234-5678"), "申請者の電話番号を返さない");
+    assert.match(photo.管理画面 as string, /\/admin\/facility\/[0-9a-f-]{36}$/);
     assert.deepEqual(photo.重なりの確認, {
       同じ施設: "同じ施設の法要・予約とは重なりません",
       法要: "同じ時間の法要はありません",

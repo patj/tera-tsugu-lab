@@ -2,6 +2,7 @@
 //   verify_memorial、find_memorial_slots、list_memorial_requests、book_memorial_service、decline_memorial_request
 // 台本の場面 0 の流れ: 故人の特定 → 検証（verify_memorial）→ 候補（find_memorial_slots）→ 確定（book_memorial_service → confirm_action）
 // 業務のロジックはドメイン層（@/domain/memorial）にある。ここでは引数を受け取り、表示の形に変えるだけ。
+// LLM には会話を進めるのに必要な最小限だけを返す（住所は町名まで。電話と申し込みの連絡事項は返さず、管理画面の URL を添える）
 import { z } from "zod";
 import { resolveStaff } from "@/domain/calendar";
 import { formatJst, invalid, jst, jstDateString, jstParts, jstTimeString, parseDateString, type Interval } from "@/domain/core";
@@ -24,11 +25,12 @@ import {
   type VerifyCandidate,
 } from "@/domain/memorial";
 import { defineReadTool, defineWriteTool, type ToolContext, type ToolDef } from "../framework/define";
+import { adminUrl, areaOf, SEE_ADMIN } from "../framework/present";
 
 const WEEKDAYS = ["日", "月", "火", "水", "木", "金", "土"];
 const dateLabel = (date: string) => `${date}（${WEEKDAYS[jstParts(jst(date)).weekday]}）`;
 const rangeLabel = (i: Interval) => `${formatJst(i.start)}〜${jstTimeString(i.end)}`;
-const appBaseUrl = () => (process.env.APP_BASE_URL ?? "http://localhost:3000").replace(/\/$/, "");
+const yearOf = (date: string | null) => (date ? Number(date.slice(0, 4)) : null);
 
 /** "YYYY-MM-DD" を検証する（エラーのメッセージは「日付」で始まるので、そのまま利用者に返る） */
 const dateArg = (desc: string) =>
@@ -81,7 +83,7 @@ const kaikiArg = z
   .describe("回忌の数字。一周忌は 2、三回忌は 3、七回忌は 7、十三回忌は 13（亡くなった年を 1 回忌と数える）");
 
 function targetOut(t: TargetView) {
-  return { person_id: t.personId, 俗名: t.name, 法号: t.homyo, 続柄: t.relation, 没年月日: t.deathDate, 回忌: t.kaiki, 呼び名: t.kaikiName };
+  return { person_id: t.personId, 俗名: t.name, 法号: t.homyo, 続柄: t.relation, 没年: yearOf(t.deathDate), 回忌: t.kaiki, 呼び名: t.kaikiName };
 }
 
 async function officiantIds(ctx: ToolContext, names: string[] | undefined): Promise<string[] | undefined> {
@@ -97,9 +99,14 @@ function candidateOut(c: VerifyCandidate) {
     法号: c.homyo,
     俗名: c.name,
     続柄: c.relation,
-    没年月日: c.deathDate,
     没年: c.deathYear,
-    世帯: { household_id: c.household.id, 名前: c.household.name, 住所: c.household.address, 状態: c.household.statusLabel },
+    世帯: {
+      household_id: c.household.id,
+      名前: c.household.name,
+      地域: areaOf(c.household.address),
+      状態: c.household.statusLabel,
+      管理画面: adminUrl(`/admin/ledger/households/${c.household.id}`),
+    },
     希望の年の回忌: c.kaikiNameInYear ? `${c.year} 年は${c.kaikiNameInYear}${c.isMemorialYear ? "" : "（年忌ではない）"}` : null,
     依頼の回忌と合う: c.matchesRequestedKaiki,
   };
@@ -110,7 +117,7 @@ const verifyMemorialTool = defineReadTool({
   description:
     "年忌法要の依頼（例: 「山田さんから、お父さんの七回忌を 3 月にやりたいと連絡があった」）を受けたら、最初に呼ぶ。次の 4 つを確かめる。\n" +
     "1. 故人の特定: person_id がわからなければ、name（名字など）と relation（「お父さん」→「父」）で呼ぶ。" +
-    "候補が複数なら status が「要確認」になり、法号・没年・世帯（住所）・その年の回忌が並ぶ。自分で 1 人に決めず、住職に「どちらの方か」を確かめてから、person_id を指定して呼び直す。\n" +
+    "候補が複数なら status が「要確認」になり、法号・没年・世帯（地域）・その年の回忌が並ぶ。自分で 1 人に決めず、住職に「どちらの方か」を確かめてから、person_id を指定して呼び直す。\n" +
     "2. 回忌と年: 希望の年が何回忌かを計算し、依頼の回忌と食い違えば指摘する。\n" +
     "3. 祥月命日: 希望日がその年の祥月命日より後なら注意を出す（法要は命日より前に繰り上げるのが一般的。受け付けはできる）。\n" +
     "4. 複数霊位供養: 同じ世帯に、同じ年に年忌を迎える故人がほかにいれば、あわせて営む（複数霊位供養）ことを提案できるように返す。住職に提案し、あわせるかどうかを尋ねる。\n" +
@@ -151,7 +158,7 @@ const verifyMemorialTool = defineReadTool({
         status: "要確認",
         メッセージ: r.message,
         候補: r.candidates.map(candidateOut),
-        次にすること: "候補を法号・没年・世帯（住所）で住職に伝え、どの方かを確かめてから、person_id を指定して verify_memorial を呼び直す",
+        次にすること: "候補を法号・没年・世帯（地域）で住職に伝え、どの方かを確かめてから、person_id を指定して verify_memorial を呼び直す",
       };
     }
     const c = r.checks;
@@ -284,7 +291,7 @@ function requestOut(r: MemorialRequestView) {
     受付: formatJst(r.createdAt),
     経路: REQUEST_SOURCE_LABELS[r.source],
     状態: REQUEST_STATUS_LABELS[r.status],
-    世帯: { household_id: r.householdId, 名前: r.householdName, 住所: r.householdAddress, 電話: r.householdPhone },
+    世帯: { household_id: r.householdId, 名前: r.householdName, 地域: areaOf(r.householdAddress) },
     申し込んだ人: r.requestedByName ?? r.staffName,
     施主: r.seshuDisplay,
     故人: r.targets.map(targetOut),
@@ -295,7 +302,7 @@ function requestOut(r: MemorialRequestView) {
     場所: LOCATION_LABELS[r.location],
     参列の人数: r.attendees,
     お斎: r.otoki === null ? null : r.otoki ? "あり" : "なし",
-    連絡事項: r.notes,
+    連絡事項: r.notes?.trim() ? SEE_ADMIN : null,
     注意: r.warnings.length > 0 ? r.warnings : undefined,
     確定した法要: r.service
       ? {
@@ -306,6 +313,7 @@ function requestOut(r: MemorialRequestView) {
         }
       : null,
     お断りの理由: r.declineReason,
+    管理画面: adminUrl(`/admin/memorial/requests/${r.id}`),
   };
 }
 
@@ -313,7 +321,8 @@ const listMemorialRequestsTool = defineReadTool({
   name: "list_memorial_requests",
   description:
     "檀家ポータルや電話で受けた、法要の申し込みの一覧。「新しい法要の申し込みはある？」と聞かれたら、status を省略して（受付済みだけ）呼ぶ。" +
-    "受付済みの申し込みは、古い順（先に来たものから）に並ぶ。故人ごとの回忌、希望の時期（第 1〜第 3 希望）、場所、参列の人数、お斎、連絡事項を返す。" +
+    "受付済みの申し込みは、古い順（先に来たものから）に並ぶ。故人ごとの回忌、希望の時期（第 1〜第 3 希望）、場所、参列の人数、お斎を返す。" +
+    "連絡事項の本文と世帯の連絡先は返さない（連絡事項があれば「あり」と返すので、住職に「管理画面」の URL で確かめてもらう）。" +
     "日時を決めるときは find_memorial_slots に memorial_request_id を渡して候補を出し、住職が選んだら book_memorial_service に memorial_request_id を渡す。" +
     "断るときは decline_memorial_request（理由が必須）。",
   input: {
@@ -396,7 +405,7 @@ function previewOf(plan: MemorialBookingPlan): string {
     "次の内容で法要を登録します（まだ登録していません）。",
     `■ 法要: ${plan.household.name} ${targets}${plan.joint ? `〔${JOINT_SERVICE_LABEL}〕` : ""}`,
     `  日時: ${formatJst(plan.start)}〜${jstTimeString(plan.end)}（${plan.durationMin} 分）`,
-    `  場所: ${LOCATION_LABELS[plan.location]}${plan.location !== "temple" && plan.household.address ? `（${plan.household.address}）` : ""}`,
+    `  場所: ${LOCATION_LABELS[plan.location]}${plan.location !== "temple" && plan.household.address ? `（${areaOf(plan.household.address)}。番地は管理画面で確認）` : ""}`,
     `  法要の担当者: ${officiant}`,
     `  施主: ${plan.seshu.display ?? "（未定）"}`,
     `■ 担当者の予定: ${officiant}のカレンダーに「${plan.title}」（${rangeLabel(plan.hold)}、${holdNote}）を業務の予定として登録します`,
@@ -457,8 +466,8 @@ const bookMemorialServiceTool = defineWriteTool({
         ? { reservation_id: r.reservation.id, 申請番号: r.reservation.requestCode, 時間: rangeLabel(p.hold), 状態: "確定" }
         : null,
       申し込み: { memorial_request_id: r.requestId, 経路: p.request ? (p.request.source === "portal" ? "ポータル" : "電話") : "電話", 状態: "確定" },
-      管理画面: `${appBaseUrl()}/admin/memorial/services/${r.serviceId}`,
-      カレンダー: `${appBaseUrl()}/admin/calendar?date=${jstDateString(p.start)}`,
+      管理画面: adminUrl(`/admin/memorial/services/${r.serviceId}`),
+      カレンダー: adminUrl(`/admin/calendar?date=${jstDateString(p.start)}`),
     };
   },
 });
