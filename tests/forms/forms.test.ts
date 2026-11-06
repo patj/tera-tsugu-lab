@@ -6,6 +6,7 @@ import type { SeedContext } from "@/db/seed/context";
 import type { Actor } from "@/domain/core";
 import {
   addQuestion,
+  countLinkHouseholds,
   createForm,
   deleteQuestion,
   getForm,
@@ -111,7 +112,9 @@ describe("フォームの作成と編集", () => {
     assert.ok((await listHouseholdLinks(staff, f.id)).every((l) => l.token === null));
     await setFormStatus(staff, f.id, "open");
     const links = await listHouseholdLinks(staff, f.id);
-    assert.deepEqual(links.map((l) => l.householdName).sort(), ["山田家", "田中家"].sort());
+    // 台帳のシードの世帯も入るので、決まった件数ではなく、檀家の世帯の数と同じことを確かめる
+    assert.ok(links.some((l) => l.householdId === yamada.id));
+    assert.equal(links.length, await countLinkHouseholds(staff));
     assert.ok(links.every((l) => l.url?.includes(`/f/${f.id}?t=`)));
   });
 });

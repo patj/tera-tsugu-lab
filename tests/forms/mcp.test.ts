@@ -7,6 +7,7 @@ import { auditLogs, forms } from "@/db/schema";
 import type { SeedContext } from "@/db/seed/context";
 import { getStaffById, staffActor } from "@/domain/core";
 import {
+  countLinkHouseholds,
   findHouseholdToken,
   getFormForRespondent,
   publicRespondentActor,
@@ -79,7 +80,10 @@ describe("MCP: 行事・アンケートフォーム（場面 3）", () => {
     assert.match(summary, /3\. 祈願する方（人ごとの項目、最大 5 人、必須）/);
     assert.match(summary, /- 男女（単一選択、必須、選択肢: 男 \/ 女、台帳から自動入力: 性別）/);
     assert.match(summary, /- 祈願の主旨（長い記述、必須）/);
-    assert.match(summary, /檀家 2 世帯に発行します/);
+    // 台帳のシードの世帯も入るので、件数はその時点の檀家の世帯の数と比べる
+    const households = await countLinkHouseholds(ctx.actor);
+    assert.ok(households >= 2);
+    assert.match(summary, new RegExp(`檀家 ${households} 世帯に発行します`));
     assert.doesNotMatch(summary, /注意:/);
     assert.equal((await db.select().from(forms)).length, before);
 
@@ -88,7 +92,7 @@ describe("MCP: 行事・アンケートフォーム（場面 3）", () => {
     const result = done.result as Record<string, unknown>;
     const formId = result.form_id as string;
     assert.equal(result.status, "受付中");
-    assert.equal(result.household_links, 2);
+    assert.equal(result.household_links, households);
     assert.equal(result.public_url, `http://localhost:3000/f/${formId}`);
     const [audit] = await db.select().from(auditLogs).where(and(eq(auditLogs.action, "forms.create"), eq(auditLogs.target, `form:${formId}`)));
     assert.equal(audit.channel, "mcp");
