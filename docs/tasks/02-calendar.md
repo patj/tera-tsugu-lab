@@ -42,9 +42,9 @@
 - [ ] 法要の予定から、法要の詳細（04 の画面）へのリンク
 
 ### MCP（`src/mcp/tools/calendar.ts`）
-- [ ] `check_staff_availability`（読み取り）: 期間とスタッフを指定して、空いている時間を返す
-- [ ] `get_staff_calendar`（読み取り）: 他人の私的な予定は「予定あり」と時間だけを返す
-- [ ] `create_staff_event`（書き込み）: 業務の予定だけを作れる（私的な予定は MCP からは作らない）
+- [x] `check_staff_availability`（読み取り）: 期間とスタッフを指定して、空いている時間を返す
+- [x] `get_staff_calendar`（読み取り）: 他人の私的な予定は「予定あり」と時間だけを返す
+- [x] `create_staff_event`（書き込み）: 業務の予定だけを作れる（私的な予定は MCP からは作らない）
 
 ### シード（`src/db/seed/calendar.ts`）
 - [ ] 2026 年 11 月〜2027 年 3 月の、業務の予定と私的な予定（奥様やアルバイトの私的な予定も含める）
