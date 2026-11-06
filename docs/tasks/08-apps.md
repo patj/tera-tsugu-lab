@@ -77,22 +77,22 @@
 アプリを作る人からの要望（日記なら日付ごとに見せたい）。アプリ単位の共有の中で、文書ごとに共有の印を付ける 2 段にする。新しい文書は共有しない。
 
 データとドメイン層
-- [ ] `app_documents.shared`（boolean、初期値 false）
-- [ ] 型: manifest の `sharing` を `boolean | "perDoc"` にする。文書に `shared` を足す。`sharing` を `true` と比べているところを見直す
-- [ ] 文書を作るときに印を付けられる（`"perDoc"` のアプリだけ。ほかは `invalid`）。`update` は印を変えない
-- [ ] 印を変える関数（`"perDoc"` のアプリだけ。本人の文書だけ。監査ログに文書の ID と付けたか外したか。本文とニックネームは残さない）
-- [ ] スタッフの閲覧: `"perDoc"` のアプリでは、アプリ単位で共有中で、かつ印の付いた文書だけを復号して渡す。監査ログの件数も渡した件数にする。利用者の一覧に見える文書の件数を出す（印が 0 件の利用者も、共有中なら一覧に出す）
-- [ ] MCP の操作者を拒否する（ほかの関数と同じ）
+- [x] `app_documents.shared`（boolean、初期値 false）
+- [x] 型: manifest の `sharing` を `boolean | "perDoc"` にする。文書に `shared` を足す。`sharing` を `true` と比べているところを見直す
+- [x] 文書を作るときに印を付けられる（`"perDoc"` のアプリだけ。ほかは `invalid`）。`update` は印を変えない
+- [x] 印を変える関数（`"perDoc"` のアプリだけ。本人の文書だけ。監査ログに文書の ID と付けたか外したか。本文とニックネームは残さない）
+- [x] スタッフの閲覧: `"perDoc"` のアプリでは、アプリ単位で共有中で、かつ印の付いた文書だけを復号して渡す。監査ログの件数も渡した件数にする。利用者の一覧に見える文書の件数を出す（印が 0 件の利用者も、共有中なら一覧に出す）
+- [x] MCP の操作者を拒否する（ほかの関数と同じ）
 
 SDK と API
-- [ ] `POST /apps/api/<app-id>/docs` で `shared` を受け取る。`PUT /apps/api/<app-id>/docs/<doc-id>/sharing`（`{ shared }`）
-- [ ] `useAppStorage`: `create(data, { shared })`、`setShared(id, shared)`（失敗すると `false`、`error` に理由）、`docs` の `shared`
+- [x] `POST /apps/api/<app-id>/docs` で `shared` を受け取る。`PUT /apps/api/<app-id>/docs/<doc-id>/sharing`（`{ shared }`）
+- [x] `useAppStorage`: `create(data, { shared })`、`setShared(id, shared)`（失敗すると `false`、`error` に理由）、`docs` の `shared`
 - [ ] `apps:check`: `sharing` の値（`false` / `true` / `"perDoc"`）、`"perDoc"` でも Admin.tsx が必要、`"perDoc"` でないアプリで `setShared` や `create` の `shared` を使ったら知らせる
 
 画面
-- [ ] 帯と全画面の右上のメニュー: `"perDoc"` で共有中なら「お寺と共有中（選んだものだけ）」
-- [ ] 共有の設定の画面（`/apps/<app-id>/sharing`）: `"perDoc"` では、選んだものだけが見えることと、印の付いた件数を出す
-- [ ] 管理画面: 利用者の一覧に見える文書の件数
+- [x] 帯と全画面の右上のメニュー: `"perDoc"` で共有中なら「お寺と共有中（選んだものだけ）」
+- [x] 共有の設定の画面（`/apps/<app-id>/sharing`）: `"perDoc"` では、選んだものだけが見えることと、印の付いた件数を出す
+- [x] 管理画面: 利用者の一覧に見える文書の件数
 
 開発キットとドキュメント
 - [ ] キットの SDK（`kit/sdk/storage.tsx`）と試す画面: 印、`setShared`、スタッフの画面には印の付いた文書だけ。上限とエラーの文は本体と同じ

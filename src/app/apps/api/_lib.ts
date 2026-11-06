@@ -34,8 +34,13 @@ export async function handle(req: NextRequest, fn: (actor: Actor) => Promise<unk
   }
 }
 
+/** 本文の JSON（オブジェクト）を読む。本文は 1 回しか読めないので、ここで 1 回だけ読む */
+export async function readBody(req: NextRequest): Promise<Record<string, unknown>> {
+  const body = (await req.json().catch(() => null)) as unknown;
+  return body !== null && typeof body === "object" && !Array.isArray(body) ? (body as Record<string, unknown>) : {};
+}
+
 /** 本文の JSON から data を取り出す（{ data: ... }） */
 export async function readData(req: NextRequest): Promise<unknown> {
-  const body = (await req.json().catch(() => null)) as { data?: unknown } | null;
-  return body?.data;
+  return (await readBody(req)).data;
 }

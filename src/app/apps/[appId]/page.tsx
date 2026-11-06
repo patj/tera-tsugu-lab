@@ -6,6 +6,7 @@
 import type { Metadata, Viewport } from "next";
 import type { ReactNode } from "react";
 import { AppStorageProvider } from "@/apps-sdk/storage";
+import { appUsesSharing } from "@/apps-sdk/types";
 import { appAssetUrl, findApp, getAppAiConsent, getAppSharing, listMyAppDocuments } from "@/domain/apps";
 import { requireAppSession } from "@/lib/apps-auth";
 import { AiConsentStatus } from "../_components/ai-consent-status";
@@ -36,12 +37,12 @@ export default async function AppPage({ params }: PageProps<"/apps/[appId]">) {
   const { actor } = await requireAppSession(`/apps/${encodeURIComponent(appId)}`);
   const [docs, shared, aiConsent] = await Promise.all([
     listMyAppDocuments(actor, appId),
-    manifest.sharing ? getAppSharing(actor, appId) : Promise.resolve(false),
+    appUsesSharing(manifest) ? getAppSharing(actor, appId) : Promise.resolve(false),
     manifest.ai ? getAppAiConsent(actor, appId) : Promise.resolve(false),
   ]);
   const { App } = views;
   const provider = (children: ReactNode) => (
-    <AppStorageProvider appId={appId} manifest={manifest} initialDocs={docs} initialAiConsent={aiConsent} sharing={{ available: manifest.sharing, shared }}>
+    <AppStorageProvider appId={appId} manifest={manifest} initialDocs={docs} initialAiConsent={aiConsent} sharing={{ available: appUsesSharing(manifest), shared }}>
       {children}
     </AppStorageProvider>
   );

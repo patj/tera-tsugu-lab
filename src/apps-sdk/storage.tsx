@@ -3,30 +3,37 @@
 // 文書の読み書き（useAppStorage）と、お寺との共有（useAppSharing）。アプリの画面（App.tsx）から使う。spec.md §7
 // 本体のページが AppStorageProvider で囲み、最初の文書と共有の状態を渡す。保存と共有の変更は /apps/api/<app-id>/ を通る
 // （サーバーで、cookie の利用者とアプリの ID を確かめ、暗号化して保存する。共有の変更は履歴と監査ログに残る）。
+// 共有は 2 段: アプリ単位（useAppSharing）と、sharing: "perDoc" のアプリの 1 件ずつの印（useAppStorage の create の shared、setShared）
 import { createContext, useCallback, useContext, useMemo, useState, type ReactNode } from "react";
 import { AppAIProvider, type AppAITransport } from "./ai-client";
 import { AppAssetsProvider } from "./assets";
-import type { AppAIResult, AppDocument, AppManifest, AppSharing, AppStorage } from "./types";
+import { appSharesPerDoc, type AppAIResult, type AppCreateOptions, type AppDocument, type AppManifest, type AppSharing, type AppStorage } from "./types";
 
 type StorageState = {
   docs: AppDocument[];
   pending: boolean;
   error: string | null;
-  create: (data: unknown) => Promise<AppDocument | null>;
+  create: (data: unknown, options?: AppCreateOptions) => Promise<AppDocument | null>;
   update: (id: string, data: unknown) => Promise<AppDocument | null>;
   remove: (id: string) => Promise<boolean>;
   removeAll: () => Promise<boolean>;
+  /** 1 件ずつの共有の印（文書ごと） */
+  setShared: (id: string, shared: boolean) => Promise<boolean>;
   clearError: () => void;
+  /** アプリ単位の共有（useAppSharing が使う） */
   sharing: SharingState;
 };
 
 type SharingState = {
   available: boolean;
+  perDoc: boolean;
   shared: boolean;
   pending: boolean;
   error: string | null;
-  setShared: (shared: boolean) => Promise<boolean>;
+  setAppShared: (shared: boolean) => Promise<boolean>;
 };
+
+const PER_DOC_UNSUPPORTED = "このアプリは、1 件ずつの共有に対応していません";
 
 const StorageContext = createContext<StorageState | null>(null);
 
@@ -101,6 +108,7 @@ export function AppStorageProvider({
   sharing: { available: boolean; shared: boolean };
   children: ReactNode;
 }) {
+  const perDoc = appSharesPerDoc(manifest);
   const [docs, setDocs] = useState<AppDocument[]>(initialDocs);
   const [pending, setPending] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -122,14 +130,18 @@ export function AppStorageProvider({
   }, []);
 
   const create = useCallback(
-    async (data: unknown) => {
-      const r = await call(`${base}/docs`, "POST", { data });
+    async (data: unknown, options?: AppCreateOptions) => {
+      if (options?.shared === true && !perDoc) {
+        setError(PER_DOC_UNSUPPORTED);
+        return null;
+      }
+      const r = await call(`${base}/docs`, "POST", options?.shared === undefined ? { data } : { data, shared: options.shared });
       if (!r?.doc) return null;
       const doc = r.doc;
       setDocs((d) => [doc, ...d]);
       return doc;
     },
-    [base, call],
+    [base, call, perDoc],
   );
 
   const update = useCallback(
@@ -153,6 +165,21 @@ export function AppStorageProvider({
     [base, call],
   );
 
+  const setDocShared = useCallback(
+    async (id: string, next: boolean) => {
+      if (!perDoc) {
+        setError(PER_DOC_UNSUPPORTED);
+        return false;
+      }
+      const r = await call(`${base}/docs/${encodeURIComponent(id)}/sharing`, "PUT", { shared: next });
+      if (!r?.doc) return false;
+      const doc = r.doc;
+      setDocs((d) => d.map((x) => (x.id === id ? doc : x)));
+      return true;
+    },
+    [base, call, perDoc],
+  );
+
   const aiTransport = useMemo(() => hostAiTransport(appId), [appId]);
 
   const removeAll = useCallback(async () => {
@@ -162,7 +189,7 @@ export function AppStorageProvider({
     return true;
   }, [base, call]);
 
-  const setShared = useCallback(
+  const setAppShared = useCallback(
     async (next: boolean) => {
       if (!sharing.available) {
         setSharingError("このアプリは、お寺との共有に対応していません");
@@ -191,10 +218,11 @@ export function AppStorageProvider({
       update,
       remove,
       removeAll,
+      setShared: setDocShared,
       clearError: () => setError(null),
-      sharing: { available: sharing.available, shared, pending: sharingPending, error: sharingError, setShared },
+      sharing: { available: sharing.available, perDoc, shared, pending: sharingPending, error: sharingError, setAppShared },
     }),
-    [docs, pending, error, create, update, remove, removeAll, sharing.available, shared, sharingPending, sharingError, setShared],
+    [docs, pending, error, create, update, remove, removeAll, setDocShared, sharing.available, perDoc, shared, sharingPending, sharingError, setAppShared],
   );
   return (
     <StorageContext.Provider value={value}>
@@ -223,10 +251,11 @@ export function useAppSharing(): AppSharing {
   const { sharing } = useStorageContext("useAppSharing");
   return {
     available: sharing.available,
+    perDoc: sharing.perDoc,
     shared: sharing.shared,
     pending: sharing.pending,
     error: sharing.error,
-    share: () => sharing.setShared(true),
-    unshare: () => sharing.setShared(false),
+    share: () => sharing.setAppShared(true),
+    unshare: () => sharing.setAppShared(false),
   };
 }

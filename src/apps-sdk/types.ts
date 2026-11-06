@@ -19,8 +19,13 @@ export type AppManifest = {
   description: string;
   /** 絵文字 1 つ */
   icon: string;
-  /** お寺との共有を使うか（true なら、利用者が共有を選べ、Admin.tsx が必要） */
-  sharing: boolean;
+  /**
+   * お寺との共有を使うか（使うなら Admin.tsx が必要）
+   * - false: 使わない
+   * - true: アプリ単位。共有すると、このアプリの文書がすべてお寺の方に見える
+   * - "perDoc": 1 件ずつ。アプリ単位で共有したうえで、利用者が印を付けた文書だけが見える（新しい文書は印なし）
+   */
+  sharing: boolean | "perDoc";
   /** 画面の出し方。"framed"（お寺の画面の中。初期値）/ "fullscreen"（アプリが画面全体を使う。右上の 48px 四方はあけておく） */
   display?: "framed" | "fullscreen";
   /** ホーム画面に追加したときの見た目。icon は assets/ の中の 512×512 の PNG */
@@ -46,7 +51,15 @@ export type AppDocument<T = unknown> = {
   /** ISO 8601 の日時 */
   createdAt: string;
   updatedAt: string;
+  /** 1 件ずつの共有の印（sharing: "perDoc" のアプリだけ。ほかのアプリでは常に false） */
+  shared: boolean;
   data: T;
+};
+
+/** create の options */
+export type AppCreateOptions = {
+  /** 共有の印を付けて作る（sharing: "perDoc" のアプリだけ。初期値 false）。印を付ける前に、お寺の方が読めるようになることを本人に伝えること */
+  shared?: boolean;
 };
 
 /** useAppStorage() が返すもの */
@@ -58,9 +71,14 @@ export type AppStorage<T> = {
   /** 直前の操作のエラー（利用者に見せてよい文） */
   error: string | null;
   /** 文書を作る。失敗したら null（error に理由が入る） */
-  create: (data: T) => Promise<AppDocument<T> | null>;
-  /** 文書を置き換える。失敗したら null */
+  create: (data: T, options?: AppCreateOptions) => Promise<AppDocument<T> | null>;
+  /** 文書を置き換える（共有の印は変わらない）。失敗したら null */
   update: (id: string, data: T) => Promise<AppDocument<T> | null>;
+  /**
+   * 1 件ずつの共有の印を付ける・外す（sharing: "perDoc" のアプリだけ）。失敗したら false
+   * 見えるのは、アプリ単位で共有しているときだけ（useAppSharing）。印を付ける前に、お寺の方が読めるようになることを本人に伝えること
+   */
+  setShared: (id: string, shared: boolean) => Promise<boolean>;
   /** 文書を消す（元に戻せない）。失敗したら false */
   remove: (id: string) => Promise<boolean>;
   /** 自分の文書をすべて消す（元に戻せない）。失敗したら false */
@@ -70,9 +88,11 @@ export type AppStorage<T> = {
 
 /** useAppSharing() が返すもの */
 export type AppSharing = {
-  /** アプリがお寺との共有に対応しているか（manifest の sharing） */
+  /** アプリがお寺との共有に対応しているか（manifest の sharing が true か "perDoc"） */
   available: boolean;
-  /** 今、お寺と共有しているか */
+  /** 1 件ずつ選んで共有するアプリか（manifest の sharing が "perDoc"）。true なら、見えるのは印を付けた文書だけ */
+  perDoc: boolean;
+  /** 今、お寺と（アプリ単位で）共有しているか */
   shared: boolean;
   /** 変更の途中か */
   pending: boolean;
@@ -146,7 +166,7 @@ export type AppAssets = {
 /** App.tsx の props */
 export type AppProps = { manifest: AppManifest };
 
-/** Admin.tsx の props（共有されている文書。新しい順。読むだけ） */
+/** Admin.tsx の props（共有されている文書。新しい順。読むだけ。sharing: "perDoc" のアプリでは、印の付いた文書だけ） */
 export type AppAdminProps<T = unknown> = {
   manifest: AppManifest;
   docs: AppDocument<T>[];
@@ -173,6 +193,16 @@ export function defineAppManifest<const M extends AppManifest>(manifest: M): M {
 export const APP_DOCUMENT_MAX_BYTES = 100 * 1024;
 export const APP_DOCUMENTS_MAX_PER_APP = 1000;
 export const APP_DOCUMENTS_MAX_LIMIT = 10_000;
+
+/** お寺との共有に対応しているか（sharing が true か "perDoc"） */
+export function appUsesSharing(manifest: Pick<AppManifest, "sharing">): boolean {
+  return manifest.sharing === true || manifest.sharing === "perDoc";
+}
+
+/** 1 件ずつの共有のアプリか */
+export function appSharesPerDoc(manifest: Pick<AppManifest, "sharing">): boolean {
+  return manifest.sharing === "perDoc";
+}
 
 /** このアプリの文書の件数の上限 */
 export function appMaxDocs(manifest: AppManifest): number {

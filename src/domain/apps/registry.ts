@@ -1,6 +1,6 @@
 // お寺のアプリの一覧（npm run apps:gen が生成した registry を使う）
 import { APP_DEFINITIONS } from "@/apps-sdk/registry.generated";
-import type { AppAITask, AppDefinition, AppManifest } from "@/apps-sdk/types";
+import { appSharesPerDoc, appUsesSharing, type AppAITask, type AppDefinition, type AppManifest } from "@/apps-sdk/types";
 import { invalid, notFound } from "../core/errors";
 
 let apps: AppDefinition[] = APP_DEFINITIONS;
@@ -27,7 +27,14 @@ export function getApp(appId: string): AppManifest {
 /** お寺との共有を使うアプリ */
 export function getSharingApp(appId: string): AppManifest {
   const m = getApp(appId);
-  if (!m.sharing) throw invalid("このアプリは、お寺との共有に対応していません");
+  if (!appUsesSharing(m)) throw invalid("このアプリは、お寺との共有に対応していません");
+  return m;
+}
+
+/** 1 件ずつの共有を使うアプリ（sharing: "perDoc"） */
+export function getPerDocSharingApp(appId: string): AppManifest {
+  const m = getApp(appId);
+  if (!appSharesPerDoc(m)) throw invalid("このアプリは、1 件ずつの共有に対応していません");
   return m;
 }
 

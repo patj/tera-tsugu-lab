@@ -30,10 +30,15 @@ export default async function AdminAppUserPage({ params }: PageProps<"/admin/app
       <h1 className="mt-2 text-2xl font-bold">
         {result.nickname} さん・{manifest.icon} {manifest.name}
       </h1>
-      <p className="mt-1 text-base text-stone-600">この画面を開いたことは、監査ログに残ります。</p>
+      <p className="mt-1 text-base text-stone-600">
+        この画面を開いたことは、監査ログに残ります。
+        {result.perDoc && "このアプリは 1 件ずつ共有するアプリです。利用者が選んだものだけを表示します。"}
+      </p>
       <div className="mt-6 max-w-3xl">
         {!result.shared ? (
           <p className="rounded border border-stone-300 bg-stone-100 px-4 py-3">この利用者は、このアプリを共有していません（共有をやめた可能性があります）。</p>
+        ) : result.perDoc && result.docs.length === 0 ? (
+          <p className="rounded border border-stone-300 bg-stone-100 px-4 py-3">この利用者は、まだ共有するものを選んでいません。</p>
         ) : Admin ? (
           <Admin manifest={manifest} docs={result.docs} nickname={result.nickname} />
         ) : (

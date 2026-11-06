@@ -25,6 +25,8 @@ export const appDocuments = pgTable(
     appId: text("app_id").notNull(),
     /** v1:<iv>:<tag>:<暗号文>（base64url） */
     ciphertext: text("ciphertext").notNull(),
+    /** 1 件ずつの共有の印（sharing: "perDoc" のアプリだけで使う。スタッフに見えるのは、アプリ単位で共有中で、かつ印の付いた文書だけ） */
+    shared: boolean("shared").notNull().default(false),
     createdAt: createdAt(),
     updatedAt: updatedAt(),
   },

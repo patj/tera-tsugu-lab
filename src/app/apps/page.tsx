@@ -1,5 +1,6 @@
 // はじめの画面: この端末で始めていなければニックネームの入力、始めていればアプリの一覧
 import Link from "next/link";
+import { appSharesPerDoc, appUsesSharing } from "@/apps-sdk/types";
 import { countMyAppDocuments, getAppSharing, listApps, safeAppsReturnPath } from "@/domain/apps";
 import { findAppSession } from "@/lib/apps-auth";
 import { startAppsAction } from "./actions";
@@ -19,7 +20,7 @@ export default async function AppsHome({ searchParams }: PageProps<"/apps">) {
 
   const apps = listApps();
   const counts = await countMyAppDocuments(session.actor);
-  const shared = await Promise.all(apps.map((a) => (a.sharing ? getAppSharing(session.actor, a.id) : Promise.resolve(false))));
+  const shared = await Promise.all(apps.map((a) => (appUsesSharing(a) ? getAppSharing(session.actor, a.id) : Promise.resolve(false))));
   return (
     <FramedShell>
       <main>
@@ -41,7 +42,7 @@ export default async function AppsHome({ searchParams }: PageProps<"/apps">) {
                       </span>
                       {a.name}
                     </span>
-                    {a.sharing && <SharedBadge shared={shared[i]} />}
+                    {appUsesSharing(a) && <SharedBadge shared={shared[i]} perDoc={appSharesPerDoc(a)} />}
                   </span>
                   <span className="mt-2 block text-base text-stone-700">{a.description}</span>
                   {(counts[a.id] ?? 0) > 0 && <span className="mt-1 block text-base text-stone-500">{counts[a.id]} 件</span>}

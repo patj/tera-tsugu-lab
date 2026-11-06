@@ -1,5 +1,6 @@
 // お寺のアプリ（管理画面）: アプリの一覧と、お寺と共有している利用者の一覧。spec.md §7
 import Link from "next/link";
+import { appSharesPerDoc, appUsesSharing } from "@/apps-sdk/types";
 import { formatJst } from "@/domain/core";
 import { getAppAiUsageSummary, listApps, listSharedAppUsers } from "@/domain/apps";
 import { getStaffActor } from "@/lib/staff-auth";
@@ -16,7 +17,8 @@ export default async function AdminAppsPage() {
     <div className="text-lg">
       <h1 className="text-2xl font-bold">お寺のアプリ</h1>
       <p className="mt-2 text-base text-stone-600">
-        利用者が「お寺と共有する」にしたアプリのデータだけが見えます（読むだけ）。共有をやめると、すぐに見えなくなります。データを開くと監査ログに残ります。
+        利用者が「お寺と共有する」にしたアプリのデータだけが見えます（読むだけ）。1 件ずつ共有するアプリでは、利用者が選んだものだけが見えます。
+        共有をやめると、すぐに見えなくなります。データを開くと監査ログに残ります。
         お寺のアプリのデータは MCP（Claude Desktop）からは扱えません。
       </p>
 
@@ -49,7 +51,9 @@ export default async function AdminAppsPage() {
                 </td>
                 <td className="px-3 py-3">{u.appName}</td>
                 <td className="px-3 py-3 text-base">{formatJst(u.sharedSince)}</td>
-                <td className="px-3 py-3 text-base">{u.docCount} 件</td>
+                <td className="px-3 py-3 text-base">
+                  {u.docCount} 件{u.perDoc && <span className="block text-sm text-stone-500">（選ばれたもの）</span>}
+                </td>
                 <td className="px-3 py-3 text-base">{u.lastUpdatedAt ? formatJst(u.lastUpdatedAt) : "—"}</td>
               </tr>
             ))}
@@ -102,7 +106,7 @@ export default async function AdminAppsPage() {
           <ul className="mt-3 space-y-2 text-base">
             {apps.map((a) => (
               <li key={a.id}>
-                {a.icon} <span className="font-bold">{a.name}</span>（{a.id}）{a.sharing ? "・お寺との共有あり" : ""}: {a.description}
+                {a.icon} <span className="font-bold">{a.name}</span>（{a.id}）{appSharesPerDoc(a) ? "・お寺との共有あり（1 件ずつ）" : appUsesSharing(a) ? "・お寺との共有あり" : ""}: {a.description}
               </li>
             ))}
           </ul>

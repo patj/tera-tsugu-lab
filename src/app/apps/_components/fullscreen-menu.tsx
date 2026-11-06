@@ -10,7 +10,7 @@ import { useAppAIConsentControl } from "@/apps-sdk/ai-client";
 import type { AppManifest } from "@/apps-sdk/types";
 
 export function FullscreenMenu({ manifest }: { manifest: AppManifest }) {
-  const { available: sharingOn, shared, unshare, pending } = useAppSharing();
+  const { available: sharingOn, perDoc, shared, unshare, pending } = useAppSharing();
   const { available: aiOn, consented, revoke } = useAppAIConsentControl();
   const [open, setOpen] = useState(false);
   const base = `/apps/${encodeURIComponent(manifest.id)}`;
@@ -38,7 +38,11 @@ export function FullscreenMenu({ manifest }: { manifest: AppManifest }) {
             <div className="mt-3 border-t border-stone-200 pt-3">
               <p>
                 お寺との共有:{" "}
-                {shared ? <span className="font-bold text-amber-900">共有中</span> : <span className="text-stone-700">自分だけ</span>}
+                {shared ? (
+                  <span className="font-bold text-amber-900">{perDoc ? "共有中（選んだものだけ）" : "共有中"}</span>
+                ) : (
+                  <span className="text-stone-700">自分だけ</span>
+                )}
               </p>
               <div className="mt-2 flex flex-wrap gap-3">
                 {shared && (
