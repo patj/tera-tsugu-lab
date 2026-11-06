@@ -3,4 +3,5 @@ export type NavItem = { href: string; label: string };
 
 export const ADMIN_NAV: NavItem[] = [
   { href: "/admin", label: "ホーム" },
+  { href: "/admin/forms", label: "行事・アンケート" },
 ];
