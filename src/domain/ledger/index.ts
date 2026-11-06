@@ -22,6 +22,8 @@ export {
   getHouseholdBasics,
   getHouseholdMembers,
   getHouseholdNamesByIds,
+  getLivingMember,
+  listActiveHouseholds,
   searchHouseholds,
   setHouseholdRoles,
   updateHousehold,

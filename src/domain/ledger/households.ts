@@ -296,6 +296,7 @@ export async function listContactLogsRaw(householdId: string, limit: number, con
 
 export type HouseholdMember = {
   id: string;
+  householdId: string;
   familyName: string;
   givenName: string;
   /** "山田 太郎" */
@@ -306,6 +307,8 @@ export type HouseholdMember = {
   gender: string | null;
   /** 世帯主から見た続柄 */
   relation: string | null;
+  mobilePhone: string | null;
+  email: string | null;
   isHead: boolean;
   isContact: boolean;
 };
@@ -326,19 +329,55 @@ export async function getHouseholdMembers(householdId: string, conn: DbOrTx = db
     .where(and(eq(persons.householdId, householdId), eq(persons.isDeceased, false)))
     .orderBy(asc(persons.birthDate), asc(persons.familyName), asc(persons.givenName));
   return rows
-    .map((p) => ({
-      id: p.id,
-      familyName: p.familyName,
-      givenName: p.givenName,
-      name: fullName(p),
-      kana: p.kana,
-      birthDate: p.birthDate,
-      gender: p.gender,
-      relation: p.relation,
-      isHead: p.id === h.headPersonId,
-      isContact: p.id === h.contactPersonId,
-    }))
+    .map((p) => toHouseholdMember(p, h))
     .sort((a, b) => Number(b.isHead) - Number(a.isHead));
+}
+
+function toHouseholdMember(
+  p: typeof persons.$inferSelect,
+  h: { headPersonId: string | null; contactPersonId: string | null },
+): HouseholdMember {
+  return {
+    id: p.id,
+    householdId: p.householdId,
+    familyName: p.familyName,
+    givenName: p.givenName,
+    name: fullName(p),
+    kana: p.kana,
+    birthDate: p.birthDate,
+    gender: p.gender,
+    relation: p.relation,
+    mobilePhone: p.mobilePhone,
+    email: p.email,
+    isHead: p.id === h.headPersonId,
+    isContact: p.id === h.contactPersonId,
+  };
+}
+
+/**
+ * 生きている個人を 1 人取る（05 のポータルの回答者、06 のポータルの本人に使う）。故人やいない人なら null。
+ * 操作者を受け取らないので、呼ぶ側で権限を確かめてから使う
+ */
+export async function getLivingMember(personId: string, conn: DbOrTx = db): Promise<HouseholdMember | null> {
+  const [p] = await conn.select().from(persons).where(eq(persons.id, personId));
+  if (!p || p.isDeceased) return null;
+  const [h] = await conn
+    .select({ headPersonId: households.headPersonId, contactPersonId: households.contactPersonId })
+    .from(households)
+    .where(eq(households.id, p.householdId));
+  return toHouseholdMember(p, h ?? { headPersonId: null, contactPersonId: null });
+}
+
+/** 檀家（active）の世帯の一覧（05 の個別リンクの発行などに使う）。カナと名前の順 */
+export async function listActiveHouseholds(
+  templeId: string,
+  conn: DbOrTx = db,
+): Promise<{ id: string; name: string; address: string | null }[]> {
+  return conn
+    .select({ id: households.id, name: households.name, address: households.address })
+    .from(households)
+    .where(and(eq(households.templeId, templeId), eq(households.status, "active")))
+    .orderBy(asc(households.kana), asc(households.name));
 }
 
 export type HouseholdBasics = {
