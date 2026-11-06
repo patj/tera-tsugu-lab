@@ -24,6 +24,7 @@
   - 戻り値: `{ from, to, slots: [{ key: "am", label: "午前" }, { key: "pm", label: "午後" }], facilities: [{ id, name, days: [{ date, weekday, available: { am: boolean, pm: boolean } }] }] }`（`true` が◯）
 - `getMainHallId(templeId, conn?)` → 本堂の ID（04 が候補を出すとき、本堂の予約を作るときに使う）。`listFacilities(templeId, conn?)` → 表示順の施設の一覧
 - 種類と状態の表示名: `KIND_LABELS`、`STATUS_LABELS`、`kindLabel(kind)`、`statusLabel(status)`
+- **操作者の注意**: `createReservation` で `status = confirmed` や `kind = memorial` の予約を作るとき、承認・お断り・取り消し、`cancelReservationsByMemorialService` は、`staffId` を持つ操作者が必要（なければ `forbidden`）。スタッフ以外（公開ページの申請者）は、申請中の前撮り・茶会・その他だけを作れる。シードでは `systemActor` に `staffId` がないので、`{ ...ctx.actor, staffId: ctx.get("staff:jushoku") }` を渡す
 
 ## タスク
 
