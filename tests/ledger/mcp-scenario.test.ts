@@ -48,7 +48,7 @@ describe("台本の場面 1、2（MCP）", () => {
       ["一周忌", "三回忌", "七回忌", "十三回忌", "三十三回忌", "三十七回忌"],
     );
     assert.equal(r["合計"], 6);
-    const all = groups.flatMap((g) => (g["故人"] as Obj[]).map((p) => ({ ...p, 呼び名: g["呼び名"] })));
+    const all: Obj[] = groups.flatMap((g) => (g["故人"] as Obj[]).map((p): Obj => ({ ...p, 呼び名: g["呼び名"] })));
     const names = all.map((p) => `${(p["世帯"] as Obj)["名前"]} ${p["俗名"]} ${p["呼び名"]}`);
     assert.ok(names.includes("山田家 山田 清 三十七回忌"));
     assert.ok(names.includes("佐藤家 佐藤 茂 七回忌"));
