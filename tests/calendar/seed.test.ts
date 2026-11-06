@@ -37,7 +37,10 @@ describe("カレンダーのシード", () => {
       for (let h = 10; h <= 15; h++) {
         const start = jst(`2027-03-${d}`, `${h}:00`);
         const slot = { start: new Date(start.getTime() - 10 * 60_000), end: new Date(start.getTime() + 50 * 60_000) };
-        for (const id of ids) (isFree(slot, busy[id]) ? free++ : taken++);
+        for (const id of ids) {
+          if (isFree(slot, busy[id])) free++;
+          else taken++;
+        }
       }
     }
     assert.ok(free > 0 && taken > 0, `空き ${free} / 埋まり ${taken}`);
