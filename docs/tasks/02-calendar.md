@@ -15,22 +15,22 @@
 ## 提供するインターフェース
 **最初に作ってコミットする**（04 が使う）。
 
-- `listOfficiants()` → `is_officiant` のスタッフ
-- `getStaffBusyIntervals(staffIds, { from, to })` → スタッフごとの「埋まっている時間」。私的な予定も含める（内容は返さない）
-- `createSharedEvent(actor, tx, { category, title, body, start, end, assigneeStaffIds, memorialServiceId? })` → 業務の予定を作る。04 が法要を確定するときに、同じトランザクションの中で呼ぶ
-- `cancelEventsByMemorialService(actor, tx, memorialServiceId)` → 法要の取り消しに合わせて、ひもづく予定を取り消す
+- `listOfficiants(templeId, conn?)` → `is_officiant` のスタッフ（`Staff[]`。表示順）
+- `getStaffBusyIntervals(staffIds, { from, to }, conn?)` → スタッフごとの「埋まっている時間」（`Record<staffId, Interval[]>`。指定した全員のキーを持ち、重なりはまとめる）。私的な予定も含める（内容は返さない）。確定の前の確かめ直しでは `conn` に `tx` を渡す
+- `createSharedEvent(actor, tx, { category, title, body, start, end, assigneeStaffIds, memorialServiceId? })` → 業務の予定を作り、ID を返す。04 が法要を確定するときに、同じトランザクションの中で呼ぶ。操作者がスタッフでない（シード）ときは、最初の担当者が作った人になる
+- `cancelEventsByMemorialService(actor, tx, memorialServiceId)` → 法要の取り消しに合わせて、ひもづく予定を取り消す（取り消した件数を返す）
 - `getCalendar(actor, { from, to, staffIds? })` → 表示用の予定。**閲覧者が本人でない私的な予定は、時間と「予定あり」だけにする**
 
 ## タスク
 
 ### ドメイン層
-- [ ] 予定の作成、更新、取り消し。私的な予定は本人だけが作れる・直せる。業務の予定は誰でも作れ、担当者を複数割り当てられる（ログインしない人の分も入れられる）
-- [ ] 私的な予定の内容の保護を**ドメイン層で**行う（`actor` が本人のときだけ内容を返す。MCP では `MCP_ACTOR` が本人）
-- [ ] 上のインターフェースとテスト
+- [x] 予定の作成、更新、取り消し。私的な予定は本人だけが作れる・直せる。業務の予定は誰でも作れ、担当者を複数割り当てられる（ログインしない人の分も入れられる）
+- [x] 私的な予定の内容の保護を**ドメイン層で**行う（`actor` が本人のときだけ内容を返す。MCP では `MCP_ACTOR` が本人）
+- [x] 上のインターフェースとテスト
   - 他人の私的な予定は内容が返らない（Web、MCP の両方の `actor` で確かめる）
   - 私的な予定も「埋まっている時間」に入る
   - 業務の予定は、割り当てた全員の「埋まっている時間」に入る
-- [ ] 繰り返しの予定は作らない（§3.2）
+- [x] 繰り返しの予定は作らない（§3.2）
 
 ### 管理画面（`/admin/calendar`）
 - [ ] **日表示**: 縦軸が時間、横軸がスタッフの横並び
