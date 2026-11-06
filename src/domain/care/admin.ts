@@ -13,6 +13,8 @@ import { decryptEntryRow } from "./entries";
 import { assertCareStaff } from "./guard";
 import { findCareTool } from "./tools";
 
+const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+
 function toolName(toolId: string): string {
   return findCareTool(toolId)?.manifest.name ?? `${toolId}（削除されたツール）`;
 }
@@ -77,6 +79,7 @@ export type SharedCareEntries = {
 /** 共有されている記録（新しい順）。同意がなければ空を返す。呼ぶたびに監査ログに残す */
 export async function listSharedCareEntries(actor: Actor, subjectId: string, toolId: string): Promise<SharedCareEntries> {
   assertCareStaff(actor);
+  if (!UUID.test(subjectId)) throw notFound("相談者が見つかりません");
   const [subject] = await db
     .select()
     .from(careSubjects)
@@ -152,6 +155,7 @@ export async function listCareAlerts(actor: Actor, opts: { includeSeen?: boolean
 /** アラートを確認済みにする（今も共有に同意している場合だけ）。監査ログに残す */
 export async function markCareAlertSeen(actor: Actor, alertId: string): Promise<void> {
   assertCareStaff(actor);
+  if (!UUID.test(alertId)) throw notFound("アラートが見つかりません");
   const [alert] = await db
     .select()
     .from(careAlerts)
