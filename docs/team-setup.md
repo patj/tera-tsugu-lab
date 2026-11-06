@@ -23,6 +23,8 @@ https://github.com/patj/tera-tsugu-lab.git をホームフォルダーに git cl
 
 4. あとは Claude Code の指示に従う。終わると、ブラウザーで開くアドレスとログインの情報を教えてくれます
 
+Claude Code は、コマンドを実行する前やフォルダーを使う前に、英語で「実行してよいか」を聞いてきます（`Do you want to ...?` や `Do you trust the files in this folder?`）。このページの手順のあいだは、**「Yes」を選んで Enter** を押してください。`Yes, and don't ask again ...` があれば、それを選ぶと聞かれる回数が減ります。
+
 途中で PowerShell を開き直すように言われたら、開き直したあとで次のように入力し、Claude Code に「続きをして」と伝えます。
 
 ```
@@ -93,7 +95,7 @@ PowerShell を開いて、上の 2 行（`cd ~\tera-tsugu-lab` と `claude`）�
 - データを消す操作（`npm run db:reset`、`docker compose down -v` など）は、はじめての準備を除き、消えるものを説明して了承を得てから行う。`docker compose down -v` は使わない
 - メンバーへの説明は、専門用語を避けた短い日本語にする。人に操作を頼むときは、どこを押すのかまで具体的に書く。1 回に頼むことは 1 つにする
 - 各手順の前に、すでに済んでいるかを確かめる。途中から再開されることがある（「続きをして」と言われたら、手順 1 から順に、済んでいるものを飛ばして進める）
-- コマンドは、Git Bash でも PowerShell でも動く書き方にしてある。リポジトリの場所は `~/tera-tsugu-lab`（`C:\Users\<名前>\tera-tsugu-lab`）とする
+- コマンドは、Claude Code の Bash（Windows では Git Bash）で実行する前提で書いてある。PowerShell で実行するときは、`curl` を `curl.exe` に、`$APPDATA` を `$env:APPDATA` に読み替える。リポジトリの場所は `~/tera-tsugu-lab`（`C:\Users\<名前>\tera-tsugu-lab`）とする
 
 ### 手順 1. リポジトリを取ってくる
 1. `git --version` で Git があることを確かめる（Windows の Claude Code は Git for Windows を使うので、ふつうは入っている）
@@ -167,7 +169,7 @@ PowerShell を開いて、上の 2 行（`cd ~\tera-tsugu-lab` と `claude`）�
 ### 「てらつぐを最新にして」と言われたら
 1. 先にメンバーに「新しい版にすると、試しに登録したデータは消えて、はじめの状態に戻ります。よいですか」と聞く。了承が得られなければ、最新にするのをやめる（データを残したまま新しい版にする方法は用意していない）
 2. `npm run dev` が動いていれば止める
-3. `git status --short` を実行する。変わったファイルがなければ次へ。`package-lock.json` だけが変わっていれば、`git checkout -- package-lock.json` で元に戻してよい。それ以外のファイルが変わっていれば、ここで止まり、開発者に相談するようメンバーに伝える（勝手に消さない）
+3. `git status --short` を実行する。変わったファイルがなければ次へ。`package-lock.json`、`AGENTS.md`、`src/apps-sdk/*.generated.ts`（起動のたびに作り直されるもの）だけが変わっていれば、`git checkout -- <ファイル>` で元に戻してよい。それ以外のファイルが変わっていれば、ここで止まり、開発者に相談するようメンバーに伝える（勝手に消さない）
 4. `git pull` を実行する
 5. `npm ci` を実行する
 6. Docker を確かめてから（「てらつぐを起動して」の 1〜2）、`npm run db:reset` を実行する
