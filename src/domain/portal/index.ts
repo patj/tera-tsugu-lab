@@ -15,6 +15,7 @@ export * from "./events";
 export * from "./family";
 export * from "./household";
 export * from "./memorial";
+export * from "./qr";
 export * from "./session";
 export * from "./tree";
 export { LOCATION_LABELS, REQUEST_STATUS_LABELS } from "./common";

@@ -1,8 +1,15 @@
-// 家系図の並べ方（純粋な関数）と招待コードの部品
+// 家系図の並べ方（純粋な関数）、招待コードの部品、QR コード
 import assert from "node:assert/strict";
 import { describe, it } from "node:test";
 import type { FamilyTreePerson, FamilyTreeRelation } from "@/domain/ledger";
-import { isInviteCodeShape, layoutFamilyTree, newInviteCode, normalizePortalEmail } from "@/domain/portal";
+import {
+  encodeQr,
+  isInviteCodeShape,
+  layoutFamilyTree,
+  newInviteCode,
+  normalizePortalEmail,
+  qrSvgPath,
+} from "@/domain/portal";
 
 function person(id: string, birth: string, extra: Partial<FamilyTreePerson> = {}): FamilyTreePerson {
   return {
@@ -97,5 +104,41 @@ describe("招待コードとメールアドレスの部品", () => {
     assert.equal(normalizePortalEmail(" Ken.Yamada@Example.COM "), "ken.yamada@example.com");
     assert.equal(normalizePortalEmail("ken@example"), null);
     assert.equal(normalizePortalEmail("a b@example.com"), null);
+  });
+});
+
+// 読み取れることは、開発中に QR コードの読み取りライブラリ（jsQR）で確かめた（型番 1〜10、日本語を含む）
+describe("QR コード（招待コードの印刷）", () => {
+  it("文字数に合わせて型番を選ぶ（誤り訂正レベル M のバイト数: 型番 1 は 14、型番 4 は 62）", () => {
+    assert.equal(encodeQr("a".repeat(14)).length, 21);
+    assert.equal(encodeQr("a".repeat(15)).length, 25);
+    assert.equal(encodeQr("a".repeat(62)).length, 33);
+    assert.equal(encodeQr("a".repeat(63)).length, 37);
+    assert.equal(encodeQr("http://localhost:3000/portal/register?code=TNKMSK26").length, 33);
+    assert.throws(() => encodeQr("a".repeat(300)), /長すぎます/);
+  });
+
+  it("3 つの角にファインダーパターンがあり、タイミングパターンが交互に並ぶ", () => {
+    const m = encodeQr("https://tera.example.jp/portal/register?code=ABCDEFGH");
+    const n = m.length;
+    const finder = (x0: number, y0: number) => {
+      for (let dy = 0; dy < 7; dy++) {
+        for (let dx = 0; dx < 7; dx++) {
+          const d = Math.max(Math.abs(dx - 3), Math.abs(dy - 3));
+          assert.equal(m[y0 + dy][x0 + dx], d !== 2, `(${x0 + dx},${y0 + dy})`);
+        }
+      }
+    };
+    finder(0, 0);
+    finder(n - 7, 0);
+    finder(0, n - 7);
+    for (let i = 8; i < n - 8; i++) {
+      assert.equal(m[6][i], i % 2 === 0);
+      assert.equal(m[i][6], i % 2 === 0);
+    }
+    assert.equal(m[n - 8][8], true, "暗いモジュール");
+    const svg = qrSvgPath(m);
+    assert.equal(svg.size, n + 8);
+    assert.ok(svg.path.startsWith("M4,4h1v1h-1z"));
   });
 });
