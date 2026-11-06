@@ -4,10 +4,12 @@ import { coreTools } from "./core";
 import { ledgerTools } from "./ledger";
 import { calendarTools } from "./calendar";
 import { facilityTools } from "./facility";
+import { formsTools } from "./forms";
 
 export const allTools: ToolDef[] = [
   ...coreTools,
   ...ledgerTools,
   ...calendarTools,
   ...facilityTools,
+  ...formsTools,
 ];

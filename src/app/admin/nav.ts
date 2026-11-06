@@ -6,4 +6,5 @@ export const ADMIN_NAV: NavItem[] = [
   { href: "/admin/ledger", label: "台帳" },
   { href: "/admin/calendar", label: "カレンダー" },
   { href: "/admin/facility", label: "施設予約" },
+  { href: "/admin/forms", label: "行事・アンケート" },
 ];
