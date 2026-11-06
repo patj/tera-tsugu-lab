@@ -316,6 +316,12 @@ export async function issueHouseholdTokens(actor: Actor, formId: string, conn: D
   return issueTokens(form.templeId, form.id, conn);
 }
 
+/** 個別リンクを発行する対象（檀家の世帯）の数 */
+export async function countLinkHouseholds(actor: Actor, conn: DbOrTx = db): Promise<number> {
+  assertStaff(actor);
+  return (await listActiveHouseholds(actor.templeId, conn)).length;
+}
+
 export type HouseholdLink = { householdId: string; householdName: string; address: string | null; token: string | null; url: string | null };
 
 /** 檀家の世帯ごとの個別リンク（印刷用）。発行していない世帯は token が null */
