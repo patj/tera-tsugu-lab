@@ -1,7 +1,10 @@
 // 【仮の実装】統合時に `@/domain/memorial` の関数に置き換える。
 // 法要の受付（04）は別の worktree で並列に作っている。04 が `@/domain/memorial` から export すると約束した関数と
 // 同じ名前・同じ形の仮の関数を置く。ポータルからは必ずこのファイルを通して呼ぶ。
-// 置き換えるときは、各関数の中身を `export { … } from "@/domain/memorial"` にすれば、ポータルのほかのファイルは変えなくてよい。
+// 置き換えるときは、4 つの関数（createMemorialRequest、listMemorialRequestsForHousehold、getHouseholdMemorialSchedule、
+// suggestKaiki）だけを `export { createMemorialRequest, … } from "@/domain/memorial";` に差し替え、このファイルの型
+// （HouseholdMemorialRequest など。index.ts が再 export している）は残す（04 が同じ型の名前を export するとは限らないため）。
+// そうすれば、ポータルのほかのファイルは変えなくてよい。
 //
 // 仮の実装の前提（テストと画面が動く程度の最小限）:
 // - memorial_requests、memorial_services、memorial_service_targets を直接読み書きする（本来の持ち主は 04）
