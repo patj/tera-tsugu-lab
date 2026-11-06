@@ -15,19 +15,22 @@
 - 01 台帳（`createContact`。公開の申請フォームだけが使う）
 
 ## 提供するインターフェース
-**最初に作ってコミットする**（04 と 06 が使う）。
+**最初に作ってコミットする**（04 と 06 が使う）。すべて `@/domain/facility` から import する。
 
-- `getFacilityBusyIntervals(facilityId, { from, to })` → `pending` と `confirmed` の予約の時間（申請中も埋まっているとみなす）
-- `createReservation(actor, tx, { facilityId, kind, status, start, end, householdId?, contactId?, memorialServiceId?, notes? })` → 重なりがあればエラー。04 が法要を確定するときに、同じトランザクションの中で呼ぶ（`kind = memorial`、`status = confirmed`）
-- `cancelReservationsByMemorialService(actor, tx, memorialServiceId)`
-- `getAvailability({ from, to })` → 施設ごとの◯×（予約の内容は返さない）。06 のポータルでも使う
+- `getFacilityBusyIntervals(facilityId, { from, to }, conn?)` → `pending` と `confirmed` の予約の時間（`Interval[]`、開始の順。申請中も埋まっているとみなす）。トランザクションの中で確かめ直すときは `conn` に `tx` を渡す
+- `createReservation(actor, tx, { facilityId, kind, status, start, end, householdId?, contactId?, memorialServiceId?, title?, notes? })` → 重なりがあれば `conflict`。04 が法要を確定するときに、同じトランザクションの中で呼ぶ（`kind = memorial`、`status = confirmed`）。DB の排他制約に当たった場合も `conflict` にする。挿入はセーブポイントの中で行うので、`conflict` を受けても呼び出し側のトランザクションは壊れない。戻り値は `Reservation`（`id`、`requestCode` など）
+- `cancelReservationsByMemorialService(actor, tx, memorialServiceId)` → 法要にひもづく申請中・確定の予約を `cancelled` にする。取り消した件数を返す
+- `getAvailability({ from, to, templeId?, facilityIds? }, conn?)` → 施設ごとの◯×（予約の内容は返さない）。`from` と `to` は `"YYYY-MM-DD"`（両端を含む）。`templeId` を省くと `getDefaultTempleId()`。06 のポータルでも使う
+  - 戻り値: `{ from, to, slots: [{ key: "am", label: "午前" }, { key: "pm", label: "午後" }], facilities: [{ id, name, days: [{ date, weekday, available: { am: boolean, pm: boolean } }] }] }`（`true` が◯）
+- `getMainHallId(templeId, conn?)` → 本堂の ID（04 が候補を出すとき、本堂の予約を作るときに使う）。`listFacilities(templeId, conn?)` → 表示順の施設の一覧
+- 種類と状態の表示名: `KIND_LABELS`、`STATUS_LABELS`、`kindLabel(kind)`、`statusLabel(status)`
 
 ## タスク
 
 ### ドメイン層
 - [ ] 予約の作成（重なりのチェック）、承認（`pending` → `confirmed`）、お断り（理由を必須にする）、取り消し
 - [ ] 申請番号（`request_code`）の発行。推測しにくく、電話でも伝えやすい形にする
-- [ ] 上のインターフェースとテスト
+- [x] 上のインターフェースとテスト
   - `pending` と `confirmed` には重ねられない。`rejected` と `cancelled` の時間には入れられる
   - 端がちょうど接する予約は重ならない
   - 承認するときにも、重なりを確かめ直す
