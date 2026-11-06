@@ -1,52 +1,61 @@
 // はじめの画面: この端末で始めていなければニックネームの入力、始めていればアプリの一覧
 import Link from "next/link";
-import { countMyAppDocuments, getAppSharing, listApps } from "@/domain/apps";
+import { countMyAppDocuments, getAppSharing, listApps, safeAppsReturnPath } from "@/domain/apps";
 import { findAppSession } from "@/lib/apps-auth";
 import { startAppsAction } from "./actions";
+import { FramedShell } from "./_components/framed-shell";
 import { ErrorBox, SharedBadge } from "./_components/ui";
 
 export default async function AppsHome({ searchParams }: PageProps<"/apps">) {
   const sp = await searchParams;
   const session = await findAppSession();
-  if (!session) return <Start error={sp.error} />;
+  if (!session) {
+    return (
+      <FramedShell>
+        <Start error={sp.error} next={safeAppsReturnPath(sp.next)} />
+      </FramedShell>
+    );
+  }
 
   const apps = listApps();
   const counts = await countMyAppDocuments(session.actor);
   const shared = await Promise.all(apps.map((a) => (a.sharing ? getAppSharing(session.actor, a.id) : Promise.resolve(false))));
   return (
-    <main>
-      <ErrorBox message={sp.error} />
-      <p className="mb-6">
-        <span className="font-bold">{session.user.nickname}</span> さん、ようこそ。
-      </p>
-      {apps.length === 0 ? (
-        <p className="rounded-xl border border-stone-200 bg-white px-5 py-4 text-stone-700">まだ使えるアプリがありません。</p>
-      ) : (
-        <ul className="space-y-4">
-          {apps.map((a, i) => (
-            <li key={a.id}>
-              <Link href={`/apps/${encodeURIComponent(a.id)}`} className="block rounded-xl border border-stone-200 bg-white px-5 py-4 hover:bg-stone-50">
-                <span className="flex items-center justify-between gap-3">
-                  <span className="text-xl font-bold">
-                    <span aria-hidden className="mr-2">
-                      {a.icon}
+    <FramedShell>
+      <main>
+        <ErrorBox message={sp.error} />
+        <p className="mb-6">
+          <span className="font-bold">{session.user.nickname}</span> さん、ようこそ。
+        </p>
+        {apps.length === 0 ? (
+          <p className="rounded-xl border border-stone-200 bg-white px-5 py-4 text-stone-700">まだ使えるアプリがありません。</p>
+        ) : (
+          <ul className="space-y-4">
+            {apps.map((a, i) => (
+              <li key={a.id}>
+                <Link href={`/apps/${encodeURIComponent(a.id)}`} className="block rounded-xl border border-stone-200 bg-white px-5 py-4 hover:bg-stone-50">
+                  <span className="flex items-center justify-between gap-3">
+                    <span className="text-xl font-bold">
+                      <span aria-hidden className="mr-2">
+                        {a.icon}
+                      </span>
+                      {a.name}
                     </span>
-                    {a.name}
+                    {a.sharing && <SharedBadge shared={shared[i]} />}
                   </span>
-                  {a.sharing && <SharedBadge shared={shared[i]} />}
-                </span>
-                <span className="mt-2 block text-base text-stone-700">{a.description}</span>
-                {(counts[a.id] ?? 0) > 0 && <span className="mt-1 block text-base text-stone-500">{counts[a.id]} 件</span>}
-              </Link>
-            </li>
-          ))}
-        </ul>
-      )}
-    </main>
+                  <span className="mt-2 block text-base text-stone-700">{a.description}</span>
+                  {(counts[a.id] ?? 0) > 0 && <span className="mt-1 block text-base text-stone-500">{counts[a.id]} 件</span>}
+                </Link>
+              </li>
+            ))}
+          </ul>
+        )}
+      </main>
+    </FramedShell>
   );
 }
 
-function Start({ error }: { error?: string | string[] }) {
+function Start({ error, next }: { error?: string | string[]; next: string | null }) {
   return (
     <main>
       <h1 className="mb-4 text-2xl font-bold">はじめに</h1>
@@ -65,6 +74,7 @@ function Start({ error }: { error?: string | string[] }) {
         </ul>
       </div>
       <form action={startAppsAction} className="mt-6 space-y-5">
+        {next && <input type="hidden" name="next" value={next} />}
         <label className="block">
           <span className="font-bold">ニックネーム</span>
           <span className="mt-1 block text-base text-stone-600">本名でなくてかまいません（20 文字まで）</span>

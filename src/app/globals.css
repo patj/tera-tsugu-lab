@@ -1,4 +1,7 @@
 @import "tailwindcss";
+/* src/app の外で Tailwind のクラスを使う場所も、CSS を作る対象にする（お寺のアプリと、その SDK。spec.md §7） */
+@source "../../apps";
+@source "../apps-sdk";
 
 /* 大きめの文字にする（spec.md §8。高齢の方も使うため） */
 html {

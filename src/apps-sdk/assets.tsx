@@ -4,16 +4,9 @@
 // 本体は /app-assets/<app-id>/、開発キットは /apps/<app-id>/assets/ から配信する（baseUrl で差し替える）。
 // このファイルは、本体と開発キットで共通（npm run kit:build でコピーする）
 import { createContext, useContext, useMemo, type ReactNode } from "react";
-import type { AppAssets } from "./types";
+import { normalizeAssetPath, type AppAssets } from "./types";
 
 const AssetsContext = createContext<AppAssets | null>(null);
-
-/** パスを、素材のディレクトリの中に限る（.. や先頭の / を許さない） */
-export function normalizeAssetPath(path: string): string {
-  const parts = path.replace(/\\/g, "/").split("/").filter((p) => p !== "" && p !== ".");
-  if (parts.length === 0 || parts.some((p) => p === "..")) throw new Error(`素材のパスが正しくありません: ${path}`);
-  return parts.map(encodeURIComponent).join("/");
-}
 
 export function AppAssetsProvider({ baseUrl, children }: { baseUrl: string; children: ReactNode }) {
   const value = useMemo<AppAssets>(() => {

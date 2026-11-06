@@ -32,9 +32,9 @@ export async function findAppSession(): Promise<{ user: AppUser; actor: Actor } 
   return user ? { user, actor: toAppUserActor(user) } : null;
 }
 
-/** この端末の利用者。いなければ、はじめの画面へ移る */
-export async function requireAppSession(): Promise<{ user: AppUser; actor: Actor }> {
+/** この端末の利用者。いなければ、はじめの画面へ移る（returnTo があれば、はじめたあとにそこへ戻る） */
+export async function requireAppSession(returnTo?: string): Promise<{ user: AppUser; actor: Actor }> {
   const s = await findAppSession();
-  if (!s) redirect("/apps");
+  if (!s) redirect(returnTo ? `/apps?next=${encodeURIComponent(returnTo)}` : "/apps");
   return s;
 }

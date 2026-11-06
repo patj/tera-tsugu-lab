@@ -4,7 +4,9 @@ import type { NextConfig } from "next";
 const nextConfig: NextConfig = {
   turbopack: {
     rules: {
-      "*.css": {
+      // Tailwind の処理は globals.css だけにかける（*.css にかけると、お寺のアプリの *.module.css も
+      // ふつうの CSS として扱われ、CSS Modules にならないため。spec.md §7「見た目」）
+      "globals.css": {
         loaders: ["@tailwindcss/turbopack"],
         as: "*.css",
       },

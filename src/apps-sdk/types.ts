@@ -199,6 +199,13 @@ export const APP_ASSET_EXTENSIONS = ["png", "jpg", "jpeg", "webp", "gif", "avif"
 export const APP_ASSET_MAX_FILE_BYTES = 2 * 1024 * 1024;
 export const APP_ASSET_MAX_TOTAL_BYTES = 30 * 1024 * 1024;
 
+/** 素材のパスを、素材のディレクトリの中に限り、URL の形にする（.. や先頭の / を許さない） */
+export function normalizeAssetPath(path: string): string {
+  const parts = path.replace(/\\/g, "/").split("/").filter((p) => p !== "" && p !== ".");
+  if (parts.length === 0 || parts.some((p) => p === "..")) throw new Error(`素材のパスが正しくありません: ${path}`);
+  return parts.map(encodeURIComponent).join("/");
+}
+
 /** AI の同意の版（purpose と sends が変わったら変わる。変わったら、もう一度同意を聞く） */
 export function appAIConsentVersion(manifest: AppManifest): string {
   if (!manifest.ai) return "";

@@ -69,7 +69,7 @@
 - [x] 素材を `public/app-assets/` に写して配信する（`apps:gen`。git の管理外）
 - [x] 件数の上限を manifest で変えられるようにする
 - [x] AI の中継: `/apps/api/<app-id>/ai/<仕事>` と `ai-consent`、同意（版つき。`app_ai_consents`）と使用の記録（`app_ai_usage`）、アプリごとの月の費用の上限、利用者ごとの 1 日と全体の 1 分あたりの回数の上限、運用者の `ANTHROPIC_API_KEY`。帯に同意の状態と「やめる」。管理画面に今月の回数と費用
-- [ ] 全画面の表示（右上の小さなボタン）、アプリごとの Web App Manifest
+- [x] 全画面の表示（右上の小さなボタンとメニュー）、アプリごとの Web App Manifest（`/apps/<app-id>/manifest.webmanifest`、テーマの色、iPhone 向けの設定）、はじめる画面から元のアプリへ戻る
 - [ ] 引き継ぎコード
 - [x] 利用者の画面の下の説明を変える（AI を使うアプリでは、同意したときだけ送ることを書く。今はすべての画面で同じ文）
 
@@ -96,6 +96,11 @@
 - 同意の API は、利用者に見せた説明の版を受け取り、今の説明と違えば同意を受け付けない（古い画面のまま同意させない）
 - 上限の設定は環境変数（`APPS_AI_MONTHLY_BUDGET_USD`、`APPS_AI_BUDGETS_USD`、`APPS_AI_GLOBAL_PER_MINUTE`）。管理画面で変える仕組みはハッカソン後
 - 確認: テスト（`tests/apps/ai-relay.test.ts`。Claude は差し替え）と、起動中の本体の画面で、同意 → 記録 → 読み直しても同意、サーバーでの入力の確かめ、帯の「やめる」、監査ログ。本体の画面から本物の Claude は呼んでいない（中の処理は 11/6 に本物の API で確かめたものと同じ）
+
+- お寺の画面の枠（ヘッダーと下の説明）は `/apps` のレイアウトから外し、`FramedShell` として各ページが出す（全画面のアプリだけ枠を出さないため）
+- 確かめる中で、本体では `apps/` と `src/apps-sdk/` の Tailwind のクラス（AI の同意の画面を含む）が作られていなかったこと、Turbopack の設定（`*.css` に Tailwind の処理をかけ `as: "*.css"` にしていた）のせいでアプリの `*.module.css` が CSS Modules にならなかったことがわかり、直した（`globals.css` の `@source`、`next.config.ts` の対象を `globals.css` だけに）
+- 確認: テスト（`tests/apps/pwa.test.ts`）と、本番のビルド（`next build` → `next start`）をヘッドレスのブラウザで: はじめる前に開く → はじめる → 元のアプリへ、全画面（枠なし）、右上のボタンの位置とメニュー、manifest とアイコン、テーマの色と iPhone 向けの設定、共有の設定の画面、共有中の印、CSS Modules と Tailwind のクラスが効くこと。実際の iPhone / Android でのホーム画面への追加は、まだ試していない
+- 起動中の開発サーバーは、ファイルを何度も入れ替えると古いモジュールを持ち続けることがあった（route handler が古い一覧や型を読む、CSS が読み込まれない）。おかしいときは `npm run dev` を起動し直す
 
 ## 残っていること
 - 最初のアプリを作り、ブラウザで useAppStorage の操作を確かめる（`docs/apps-guide.md` の手順で）
