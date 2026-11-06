@@ -39,14 +39,24 @@ export async function dropAll(url: string): Promise<void> {
   }
 }
 
-/** drizzle-kit push でスキーマを反映する（確認なしで実行する。開発用の DB だけで使う） */
-export function pushSchema(url: string): void {
-  const r = spawnSync("npx", ["drizzle-kit", "push", "--force"], {
+/**
+ * node_modules のコマンドを、いま動いている node で直接実行する。
+ * Windows では npx が npx.cmd なので、shell なしの spawnSync("npx") は起動できない。
+ */
+export function runNodeBin(bin: string, args: string[], env: NodeJS.ProcessEnv): number {
+  const r = spawnSync(process.execPath, [path.join(ROOT, "node_modules", bin), ...args], {
     cwd: ROOT,
     stdio: "inherit",
-    env: { ...process.env, DATABASE_URL: url },
+    env,
   });
-  if (r.status !== 0) throw new Error("drizzle-kit push に失敗しました");
+  if (r.error) throw r.error;
+  return r.status ?? 1;
+}
+
+/** drizzle-kit push でスキーマを反映する（確認なしで実行する。開発用の DB だけで使う） */
+export function pushSchema(url: string): void {
+  const status = runNodeBin("drizzle-kit/bin.cjs", ["push", "--force"], { ...process.env, DATABASE_URL: url });
+  if (status !== 0) throw new Error("drizzle-kit push に失敗しました");
 }
 
 /** src/db/sql/ の SQL を名前の順に流す（push で作れない拡張や排他制約） */
