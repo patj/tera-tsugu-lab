@@ -73,6 +73,35 @@
 - [ ] 引き継ぎコード
 - [x] 利用者の画面の下の説明を変える（AI を使うアプリでは、同意したときだけ送ることを書く。今はすべての画面で同じ文）
 
+### 1 件ずつの共有（11/6。spec.md §7「1 件ずつの共有」）
+アプリを作る人からの要望（日記なら日付ごとに見せたい）。アプリ単位の共有の中で、文書ごとに共有の印を付ける 2 段にする。新しい文書は共有しない。
+
+データとドメイン層
+- [ ] `app_documents.shared`（boolean、初期値 false）
+- [ ] 型: manifest の `sharing` を `boolean | "perDoc"` にする。文書に `shared` を足す。`sharing` を `true` と比べているところを見直す
+- [ ] 文書を作るときに印を付けられる（`"perDoc"` のアプリだけ。ほかは `invalid`）。`update` は印を変えない
+- [ ] 印を変える関数（`"perDoc"` のアプリだけ。本人の文書だけ。監査ログに文書の ID と付けたか外したか。本文とニックネームは残さない）
+- [ ] スタッフの閲覧: `"perDoc"` のアプリでは、アプリ単位で共有中で、かつ印の付いた文書だけを復号して渡す。監査ログの件数も渡した件数にする。利用者の一覧に見える文書の件数を出す（印が 0 件の利用者も、共有中なら一覧に出す）
+- [ ] MCP の操作者を拒否する（ほかの関数と同じ）
+
+SDK と API
+- [ ] `POST /apps/api/<app-id>/docs` で `shared` を受け取る。`PUT /apps/api/<app-id>/docs/<doc-id>/sharing`（`{ shared }`）
+- [ ] `useAppStorage`: `create(data, { shared })`、`setShared(id, shared)`（失敗すると `false`、`error` に理由）、`docs` の `shared`
+- [ ] `apps:check`: `sharing` の値（`false` / `true` / `"perDoc"`）、`"perDoc"` でも Admin.tsx が必要、`"perDoc"` でないアプリで `setShared` や `create` の `shared` を使ったら知らせる
+
+画面
+- [ ] 帯と全画面の右上のメニュー: `"perDoc"` で共有中なら「お寺と共有中（選んだものだけ）」
+- [ ] 共有の設定の画面（`/apps/<app-id>/sharing`）: `"perDoc"` では、選んだものだけが見えることと、印の付いた件数を出す
+- [ ] 管理画面: 利用者の一覧に見える文書の件数
+
+開発キットとドキュメント
+- [ ] キットの SDK（`kit/sdk/storage.tsx`）と試す画面: 印、`setShared`、スタッフの画面には印の付いた文書だけ。上限とエラーの文は本体と同じ
+- [ ] `apps/CLAUDE.md`（ルール 5 に 1 件ずつの共有の説明、`useAppStorage` の例、manifest の `sharing`）、ひな形、本体とキットの skill、`docs/apps-guide.md`（能力の表、確かめ方、公開の前のチェックリスト）、キットの README / CLAUDE.md
+
+テストと確認
+- [ ] テスト: 新しい文書は共有しない、印を付けた文書だけがスタッフに渡る（復号もしない）、アプリ単位でやめると印があっても見えない、共有し直すと印の付いた過去の文書が見える、`update` で印が変わらない、他人の文書の印は変えられない、`sharing: true` のアプリで印を使うとエラー、監査ログ（本文とニックネームなし）、MCP の拒否、`apps:check`、キットの SDK の export が本体と同じ
+- [ ] 確認: 一時的な `"perDoc"` のアプリで、作る → 印を付ける → 共有 → 管理画面で印の付いた文書だけ見える → 印を外す → 見えない → アプリ単位でやめる → 見えない（一時的なアプリとデータは消す）
+
 ## 決めたこと
 - spec.md §7 のとおり（能力は個人の保存とお寺との共有だけ、利用者は匿名だけ、アプリはリポジトリの中の React）
 - コードの名前: アプリは `apps/<app-id>/`、ドメイン層は `src/domain/apps/`、SDK は `src/apps-sdk/`、テーブルは `app_*`、利用者の画面は `/apps`、cookie は `tera_apps`（パス `/apps`）
