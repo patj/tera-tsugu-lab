@@ -93,13 +93,23 @@ npm run dev           # 起動中なら、かわりに npm run apps:gen
 本体を渡さずに、お寺さんにアプリを作ってもらうときは、開発キットを渡す。
 
 ```sh
-npm run kit:build     # dist/temple-app-kit.zip ができる
+npm run kit:build                       # dist/temple-app-kit.zip ができる（zip のコマンドがなければ dist/temple-app-kit/ だけ）
+npm run kit:build -- --into <フォルダー>  # キットをそのフォルダーに作る。すでにあるキットなら、作っているアプリ、.env、node_modules を残して新しくする
 ```
 
 キットには、試す画面（本体に近い見た目。保存先はブラウザの中。AI は試す画面のサーバーが本体と同じ処理で Claude を呼ぶ。キーはお寺さんの `.env`）、本体と同じ API の SDK、`apps:check`、ひな形、Claude Code の決まりと skill、お寺さん向けの `README.md` が入っている。`.env` は zip に入らない。
 
-送られてきたアプリ（`apps/<app-id>/` の zip）を組み込むとき:
-1. zip を展開し、`apps/<app-id>/` に置く（同じ ID のアプリがないことを確かめる）
+本体も手元で動かしている人（チームのメンバーなど）は、キットで作ったアプリを本体で確かめられる。本体のファイルは書き換えない（手順は [team-setup.md](team-setup.md) の「お寺のアプリを作る」）。
+
+```sh
+npm run apps:try -- <キット>/apps/<app-id>   # apps/<app-id>/ にコピーし、一覧を作り直して、決まりのチェックを流す。コピーは .git/info/exclude で git に無視させる
+npm run apps:untry -- <app-id>               # apps:try で置いたコピーを消す
+```
+
+`apps:try` は、リポジトリに入っているアプリと、`apps:try` で置いたのではないフォルダーを上書きしない。
+
+送られてきたアプリ（`apps/<app-id>/` の zip、または先方のリポジトリ）を組み込むとき:
+1. `apps/<app-id>/` にコピーする（同じ ID のアプリがないことを確かめる）。**`apps:try` は使わない**（コピーが git に無視され、コミットできない。試しに置いていたら、先に `apps:untry` で消す）
 2. **コードを読む**: データの持ち出しや外部への送信がないか、共有をオンにする前に説明があるか、Admin.tsx に保存した内容だけを出しているか。AI を使うアプリでは、`ai.ts` の指示（利用者の入力を混ぜていないか、不適切な指示がないか）、`ai.sends` と `ai.purpose` が実際に送るものと合っているか、モデルと 1 日の回数（費用）、AI が失敗したときにアプリが止まらないか。素材の中身（大きさ、権利）
    - AI の費用の上限を決める: アプリごとの月の上限は `APPS_AI_MONTHLY_BUDGET_USD`（初期値 10 ドル）、アプリごとに変えるときは `APPS_AI_BUDGETS_USD`（JSON）。キーは `ANTHROPIC_API_KEY`（サーバーの環境変数）
 3. `npm run apps:gen`、`npm run apps:check`、`npm run typecheck`、`npm run lint`
