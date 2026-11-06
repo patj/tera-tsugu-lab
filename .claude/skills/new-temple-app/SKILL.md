@@ -1,0 +1,49 @@
+---
+name: new-temple-app
+description: 「お寺のアプリ」（apps/<app-id>/。日記、占い、写経の記録など、住職が欲しい小さな機能）を、ひな形から作る。「〇〇のアプリを作りたい」「〇〇できる機能がほしい」「お寺のアプリを作って」と言われたときに使う。
+---
+
+# お寺のアプリを作る
+
+`apps/_template/` から、お寺のアプリを作る。作る前に、必ず `apps/CLAUDE.md`（ルール）を読む。人向けの手順書は `docs/apps-guide.md`。
+
+## 1. 聞き取る（足りないことだけ、まとめて 1 回で聞く）
+
+- だれが、どんなときに使うか
+- 利用者が画面でできること（書く、選ぶ、引く、振り返る など）
+- 保存するもの（1 件の文書に何を入れるか）。保存がいらないアプリもある（その場合も、履歴を残すかを聞く）
+- お寺と共有できるようにするか（`sharing`）。する場合、スタッフの画面で何を見せるか
+- アプリの名前と、アイコン（絵文字 1 つ）
+
+相手はプログラミングに詳しくない前提で、やさしい言葉で聞く。決まらないことは、おすすめを示して進めてよい。
+基盤にない能力（お寺に送る、お寺が内容を編集する、檀家としてログインする、外部のサービスを使う など）が必要なら、今はできないことを伝え、できる範囲の案を出す（docs/spec.md §7 の「検討して採らなかった案」）。
+
+## 2. 作る
+
+1. アプリの ID を決める（英小文字・数字・`-`。`api` は使えない。例: `shakyo-log`）。`apps/<id>/` がまだないことを確かめる
+2. `cp -r apps/_template apps/<id>`
+3. `manifest.ts`: `id` をディレクトリの名前に、`name`、`description`、`icon`、`sharing` を書く
+4. `types.ts`: 文書の data の型を書く
+5. `App.tsx`: 利用者の画面（`"use client"`）。`useAppStorage<型>()` の `docs` / `create` / `update` / `remove` で読み書きする。`error` を画面に出す。日時は `timeZone: "Asia/Tokyo"` を付けて表示する
+6. `Admin.tsx`: `sharing: true` のとき。共有された文書を表示するだけ。`sharing: false` なら消してよい
+7. `README.md`: 目的、だれ向けか、文書の形、画面、共有を使うか
+
+## 3. 守ること（apps/CLAUDE.md の要約）
+
+- import は `@/apps-sdk`、`react`、`zod`、自分のディレクトリの中だけ
+- データは `useAppStorage` だけで読み書きする（DB、cookie、localStorage などに触らない）。外部に送信しない（fetch、外部の URL）
+- `src/` などの本体のファイルは変えない
+
+## 4. 確かめる
+
+```sh
+npm run apps:gen
+npm run apps:check   # 違反が 0 件になるまで直す
+npm run typecheck
+npm run lint
+```
+
+最後に、相手に次を伝える。
+- `npm run dev` のあと（起動中なら `npm run apps:gen` のあと）、`/apps` で試せること（ニックネームで始め、作る・直す・消す）
+- `sharing: true` なら、アプリの画面の上の「共有の設定」で共有し、管理画面の「お寺のアプリ」（`/admin/apps`）で見え方を確かめられること
+- 公開の前に、人がコードを読み、`npm run apps:check` をもう一度流すこと

@@ -22,36 +22,44 @@
 ## タスク
 
 ### 改める前の実装を片づける
-- [ ] `care` の名前を `apps` に変える（テーブル、ドメイン層、SDK、画面、cookie、環境変数、スクリプト、npm のスクリプト、テスト）
-- [ ] 危機検知、相談窓口、注意書き、アラート（`care_alerts`）、項目の定義（fields、schema）と、決まった形のフォームを消す
-- [ ] 開発用の DB の古いテーブル（`care_*`）を消す
+- [x] `care` の名前を `apps` に変える（テーブル、ドメイン層、SDK、画面、cookie、環境変数、スクリプト、npm のスクリプト、テスト）
+- [x] 危機検知、相談窓口、注意書き、アラート（`care_alerts`）、項目の定義（fields、schema）と、決まった形のフォームを消す
+- [x] 開発用の DB の古いテーブル（`care_*`）を消す
 
 ### データと安全の仕組み
-- [ ] テーブル（`app_users`、`app_documents`、`app_consents`）。すべてに `temple_id`
-- [ ] 文書の保存（自由形式の JSON。作る、一覧、更新、削除）。暗号化（鍵は `APPS_ENCRYPTION_KEY`）。上限（1 件 100 KB、利用者 × アプリごとに 1,000 件）
-- [ ] 共有の設定（`sharing: true` のアプリだけ。履歴、監査ログ）
-- [ ] スタッフ向け: 共有している利用者の一覧、共有された文書（開くたびに監査ログ）
-- [ ] すべての関数で、MCP の操作者を拒否する
+- [x] テーブル（`app_users`、`app_documents`、`app_consents`）。すべてに `temple_id`
+- [x] 文書の保存（自由形式の JSON。作る、一覧、更新、削除）。暗号化（鍵は `APPS_ENCRYPTION_KEY`）。上限（1 件 100 KB、利用者 × アプリごとに 1,000 件）
+- [x] 共有の設定（`sharing: true` のアプリだけ。履歴、監査ログ）
+- [x] スタッフ向け: 共有している利用者の一覧、共有された文書（開くたびに監査ログ）
+- [x] すべての関数で、MCP の操作者を拒否する
 
 ### アプリの仕組み
-- [ ] `@/apps-sdk`: `defineAppManifest`、`useAppStorage<T>()`、`AppAdminProps<T>` などの型
-- [ ] 文書の読み書きの API（`/apps/api/<app-id>/docs`。cookie の利用者だけ。同じオリジンからだけ）
-- [ ] `npm run apps:gen`（`predev`、`prebuild`）、`npm run apps:check`（必要なファイル、import の許可リスト、外部への送信など、manifest の id、一覧が最新か）
-- [ ] ひな形（`apps/_template/`）、`apps/CLAUDE.md`、skill（`.claude/skills/new-temple-app/`）、手順書（`docs/apps-guide.md`）
+- [x] `@/apps-sdk`: `defineAppManifest`、`useAppStorage<T>()`、`AppAdminProps<T>` などの型
+- [x] 文書の読み書きの API（`/apps/api/<app-id>/docs`。cookie の利用者だけ。同じオリジンからだけ）
+- [x] `npm run apps:gen`（`predev`、`prebuild`）、`npm run apps:check`（必要なファイル、import の許可リスト、外部への送信など、manifest の id、一覧が最新か）
+- [x] ひな形（`apps/_template/`）、`apps/CLAUDE.md`、skill（`.claude/skills/new-temple-app/`）、手順書（`docs/apps-guide.md`）
 
 ### 画面
-- [ ] 利用者: はじめの画面（ニックネーム。端末を変えると戻れないことを明示）、アプリの一覧、アプリの画面（基盤の帯と共有の設定へのリンク）、共有の設定
-- [ ] スタッフ: アプリの一覧、共有している利用者の一覧、共有された文書（アプリの Admin.tsx）
+- [x] 利用者: はじめの画面（ニックネーム。端末を変えると戻れないことを明示）、アプリの一覧、アプリの画面（基盤の帯と共有の設定へのリンク）、共有の設定
+- [x] スタッフ: アプリの一覧、共有している利用者の一覧、共有された文書（アプリの Admin.tsx）
 
 ### テスト
-- [ ] 暗号化（往復、改ざん、付け替え）、文書の読み書きと上限、共有（共有 → やめるとすぐに見えない、共有し直すと過去の文書も見える）、他人の文書に触れない、MCP の拒否、監査ログ（本文とニックネームを残さない）、DB に平文が残らない、`apps:check`
+- [x] 暗号化（往復、改ざん、付け替え）、文書の読み書きと上限、共有（共有 → やめるとすぐに見えない、共有し直すと過去の文書も見える）、他人の文書に触れない、MCP の拒否、監査ログ（本文とニックネームを残さない）、DB に平文が残らない、`apps:check`
 
 ## 決めたこと
 - spec.md §7 のとおり（能力は個人の保存とお寺との共有だけ、利用者は匿名だけ、アプリはリポジトリの中の React）
 - コードの名前: アプリは `apps/<app-id>/`、ドメイン層は `src/domain/apps/`、SDK は `src/apps-sdk/`、テーブルは `app_*`、利用者の画面は `/apps`、cookie は `tera_apps`（パス `/apps`）
 
-## 決めること
-- 文書の読み書きの API の形（Route Handler にするか、Server Actions にするか）
+- 文書の読み書きの API は Route Handler（`/apps/api/<app-id>/docs`）にした。`useAppStorage` がブラウザから呼ぶので、Server Actions よりも、メソッド（GET / POST / PUT / DELETE）と状態コードで分かりやすく書けるため。同じオリジンからの JSON だけを受け付ける（ほかのサイトのフォームからは送れない）。アプリの ID に `api` は使えない（`apps:check` で確かめる）
+- `useAppStorage` の `create` / `update` / `remove` は、失敗しても例外を投げず、`null` / `false` を返して `error` に理由を入れる（Claude Code が作るアプリで、例外の扱いを忘れても画面が壊れないように）
+- 文書の状態は `AppStorageProvider`（本体のページが置く）が持つ。同じ画面の中で `useAppStorage` を何度呼んでも、同じ文書を見る
+- アプリが共有に対応しなくなったら（manifest の `sharing` を false にしたら）、以前の共有の設定が残っていても、スタッフには見せない
+- 確認: テスト（tests/apps/）に加えて、起動中の開発サーバーで、ひな形をコピーした一時的なアプリを使い、はじめる → 作る・直す・消す → 他人からは触れない → 共有 → 管理画面で見える → やめると見えない、を確かめた（一時的なアプリとデータは消した）。ブラウザの JavaScript（useAppStorage）での操作は、まだ実機で確かめていない
+- シードにアプリのデータは入れない（アプリを同梱しないため）
+
+## 残っていること
+- 最初のアプリを作り、ブラウザで useAppStorage の操作を確かめる（`docs/apps-guide.md` の手順で）
+- デモの台本に入れるかどうか（§11）
 
 ## 依頼
 - なし

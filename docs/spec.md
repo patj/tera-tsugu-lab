@@ -330,7 +330,7 @@ apps/<app-id>/
   | 名前 | 内容 |
   |---|---|
   | `defineAppManifest(manifest)` | manifest に型を付ける |
-  | `useAppStorage<T>()` | 利用者の画面で使う。`{ docs, create(data), update(id, data), remove(id), pending, error }`。`docs` は `{ id, createdAt, updatedAt, data: T }` の新しい順 |
+  | `useAppStorage<T>()` | 利用者の画面で使う。`{ docs, create(data), update(id, data), remove(id), pending, error }`。`docs` は `{ id, createdAt, updatedAt, data: T }` の新しい順（日時は ISO 8601 の文字列）。`create` / `update` は失敗すると `null`、`remove` は `false` を返し、`error` に利用者に見せる理由が入る |
   | `AppAdminProps<T>` | Admin.tsx の props の型（`{ manifest, docs, nickname }`） |
 
 - **アプリが守ること**（`npm run apps:check` で確かめる）
@@ -339,6 +339,7 @@ apps/<app-id>/
   - 外部に送信しない（`fetch`、外部の URL を使わない）。`process.env`、`eval`、`"use server"`、`dangerouslySetInnerHTML` を使わない
   - `apps:check` は正規表現のチェックなので、悪意のある書き方までは防げない。**公開の前に、人がアプリのコードを読む**
 - **本体が受け持つこと**: 利用の開始（ニックネーム）、アプリの一覧、共有の設定の画面、文書の保存（暗号化）、スタッフの閲覧（監査ログ）
+- **文書の読み書きの API**: Route Handler（`/apps/api/<app-id>/docs` の GET / POST、`.../docs/<doc-id>` の PUT / DELETE）。利用者は cookie で決め、URL や本文からは受け取らない。同じオリジンからの JSON だけを受け付ける。`useAppStorage` が呼ぶ（アプリのコードから直接は呼ばない）。そのため、アプリの ID に `api` は使えない
 
 ### 決定事項（安全）
 - 文書の本文は暗号化して保存する（AES-256-GCM。鍵は環境変数 `APPS_ENCRYPTION_KEY`。利用者とアプリの ID を追加の認証データにして、付け替えを防ぐ）
