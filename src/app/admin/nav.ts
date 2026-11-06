@@ -3,6 +3,7 @@ export type NavItem = { href: string; label: string };
 
 export const ADMIN_NAV: NavItem[] = [
   { href: "/admin", label: "ホーム" },
+  { href: "/admin/ledger", label: "台帳" },
   { href: "/admin/calendar", label: "カレンダー" },
   { href: "/admin/facility", label: "施設予約" },
 ];

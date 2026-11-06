@@ -4,11 +4,13 @@ import { closeDb, db } from "../client";
 import { systemActor } from "@/domain/core";
 import { createSeedContext, type Seed, type SeedContext } from "./context";
 import { coreSeed, seedTemple } from "./core";
+import { ledgerSeed } from "./ledger";
 import { calendarSeed } from "./calendar";
 import { facilitySeed } from "./facility";
 
 const SEEDS: Seed[] = [
   coreSeed,
+  ledgerSeed,
   calendarSeed,
   facilitySeed,
 ];
