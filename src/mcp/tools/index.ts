@@ -5,6 +5,7 @@ import { ledgerTools } from "./ledger";
 import { calendarTools } from "./calendar";
 import { facilityTools } from "./facility";
 import { formsTools } from "./forms";
+import { memorialTools } from "./memorial";
 
 export const allTools: ToolDef[] = [
   ...coreTools,
@@ -12,4 +13,5 @@ export const allTools: ToolDef[] = [
   ...calendarTools,
   ...facilityTools,
   ...formsTools,
+  ...memorialTools,
 ];
