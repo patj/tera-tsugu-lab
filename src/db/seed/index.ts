@@ -4,9 +4,11 @@ import { closeDb, db } from "../client";
 import { systemActor } from "@/domain/core";
 import { createSeedContext, type Seed, type SeedContext } from "./context";
 import { coreSeed, seedTemple } from "./core";
+import { calendarSeed } from "./calendar";
 
 const SEEDS: Seed[] = [
   coreSeed,
+  calendarSeed,
 ];
 
 export async function runSeeds(): Promise<SeedContext> {
