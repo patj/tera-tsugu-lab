@@ -5,7 +5,17 @@ import { cancelEvent, createEvent, getEvent, updateEvent, type EventVisibility }
 import { isDomainError, jst, jstDateString } from "@/domain/core";
 import { getStaffActor } from "@/lib/staff-auth";
 
-export type EventFormState = { error?: string };
+export type SubmittedValues = {
+  title: string;
+  body: string;
+  startDate: string;
+  startTime: string;
+  endDate: string;
+  endTime: string;
+  assigneeStaffIds: string[];
+};
+/** エラーのときは、入力した値を返す（React はフォームの送信のあとで入力を初期値に戻すため） */
+export type EventFormState = { error?: string; values?: SubmittedValues };
 
 function str(formData: FormData, name: string): string {
   const v = formData.get(name);
@@ -29,6 +39,16 @@ function parseWhen(formData: FormData) {
 export async function saveEvent(_prev: EventFormState, formData: FormData): Promise<EventFormState> {
   const actor = await getStaffActor();
   const eventId = str(formData, "eventId");
+  const assigneeStaffIds = formData.getAll("assignees").filter((v): v is string => typeof v === "string");
+  const values: SubmittedValues = {
+    title: str(formData, "title"),
+    body: str(formData, "body"),
+    startDate: str(formData, "startDate"),
+    startTime: str(formData, "startTime"),
+    endDate: str(formData, "endDate"),
+    endTime: str(formData, "endTime"),
+    assigneeStaffIds,
+  };
   let start: Date;
   try {
     const when = parseWhen(formData);
@@ -39,7 +59,7 @@ export async function saveEvent(_prev: EventFormState, formData: FormData): Prom
       body: str(formData, "body"),
       start: when.start,
       end: when.end,
-      assigneeStaffIds: formData.getAll("assignees").filter((v): v is string => typeof v === "string"),
+      assigneeStaffIds,
     };
     if (eventId) {
       await updateEvent(actor, eventId, common);
@@ -48,7 +68,7 @@ export async function saveEvent(_prev: EventFormState, formData: FormData): Prom
     }
   } catch (e) {
     const msg = userMessage(e);
-    if (msg) return { error: msg };
+    if (msg) return { error: msg, values };
     throw e;
   }
   redirect(`/admin/calendar?date=${jstDateString(start)}`);

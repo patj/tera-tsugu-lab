@@ -38,6 +38,8 @@ export function EventForm({
   const [category, setCategory] = useState(initial.category);
   const categories = visibility === "shared" ? SHARED_CATEGORIES : ALL_CATEGORIES;
   const editing = Boolean(eventId);
+  // エラーで戻ったときは、入力した値を初期値にする
+  const v = { ...initial, ...state.values };
 
   return (
     <form action={action} className="space-y-6">
@@ -93,25 +95,25 @@ export function EventForm({
 
       <label className="block">
         <span className="font-medium">タイトル</span>
-        <input name="title" defaultValue={initial.title} required maxLength={100} className={inputCls} />
+        <input name="title" defaultValue={v.title} required maxLength={100} className={inputCls} />
       </label>
 
       <div className="grid gap-4 sm:grid-cols-2">
         <label className="block">
           <span className="font-medium">始まりの日</span>
-          <input type="date" name="startDate" defaultValue={initial.startDate} required className={inputCls} />
+          <input type="date" name="startDate" defaultValue={v.startDate} required className={inputCls} />
         </label>
         <label className="block">
           <span className="font-medium">始まりの時刻</span>
-          <input type="time" name="startTime" defaultValue={initial.startTime} required step={300} className={inputCls} />
+          <input type="time" name="startTime" defaultValue={v.startTime} required step={300} className={inputCls} />
         </label>
         <label className="block">
           <span className="font-medium">終わりの日</span>
-          <input type="date" name="endDate" defaultValue={initial.endDate} required className={inputCls} />
+          <input type="date" name="endDate" defaultValue={v.endDate} required className={inputCls} />
         </label>
         <label className="block">
           <span className="font-medium">終わりの時刻</span>
-          <input type="time" name="endTime" defaultValue={initial.endTime} required step={300} className={inputCls} />
+          <input type="time" name="endTime" defaultValue={v.endTime} required step={300} className={inputCls} />
         </label>
       </div>
 
@@ -121,7 +123,7 @@ export function EventForm({
           <div className="mt-2 grid gap-2 sm:grid-cols-2">
             {staff.map((s) => (
               <label key={s.id} className="flex cursor-pointer items-center gap-2 rounded border border-stone-300 bg-white px-3 py-2">
-                <input type="checkbox" name="assignees" value={s.id} defaultChecked={initial.assigneeStaffIds.includes(s.id)} />
+                <input type="checkbox" name="assignees" value={s.id} defaultChecked={v.assigneeStaffIds.includes(s.id)} />
                 {s.isOfficiant && (
                   <span
                     role="img"
@@ -147,7 +149,7 @@ export function EventForm({
 
       <label className="block">
         <span className="font-medium">内容（メモ）</span>
-        <textarea name="body" defaultValue={initial.body} rows={4} maxLength={2000} className={inputCls} />
+        <textarea name="body" defaultValue={v.body} rows={4} maxLength={2000} className={inputCls} />
       </label>
 
       {state.error && (

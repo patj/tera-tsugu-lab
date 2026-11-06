@@ -87,6 +87,12 @@ describe("カレンダーの MCP ツール", () => {
   it("check_staff_availability: 知らないスタッフや逆さまの期間はエラー", async () => {
     const r1 = await runtime.call("check_staff_availability", { from: DAY, staff: ["山田"] }, ctx);
     assert.equal(r1.ok, false);
+    const r0 = await runtime.call(
+      "create_staff_event",
+      { title: "x", category: "法要", start: `${DAY} 10:00`, end: `${DAY} 11:00`, assignees: ["住職"] },
+      ctx,
+    );
+    assert.equal(r0.ok, false, "法要の予定は book_memorial_service で作る");
     const r2 = await runtime.call("check_staff_availability", { from: DAY, to: "2028-05-01" }, ctx);
     assert.equal(r2.ok, false);
   });
@@ -129,7 +135,7 @@ describe("カレンダーの MCP ツール", () => {
     );
   });
 
-  it("create_staff_event: 私用のカテゴリ（私的な予定）は作れない。終わりが始まりより前もエラー", async () => {
+  it("create_staff_event: 私用（私的な予定）と法要のカテゴリは作れない。終わりが始まりより前もエラー", async () => {
     const r1 = await runtime.call(
       "create_staff_event",
       { title: "x", category: "私用", start: `${DAY} 10:00`, end: `${DAY} 11:00`, assignees: ["住職"] },

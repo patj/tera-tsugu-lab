@@ -11,7 +11,6 @@ import {
   getStaffAvailability,
   getStaffBusyIntervals,
   resolveStaff,
-  SHARED_EVENT_CATEGORIES,
   type CalendarEvent,
 } from "@/domain/calendar";
 import {
@@ -147,9 +146,12 @@ const getStaffCalendar = defineReadTool({
 
 // ---- create_staff_event ----
 
+/** MCP から作れるカテゴリ（「法要」は book_memorial_service が法要とひもづけて作る。「私用」は私的な予定だけ） */
+const MCP_EVENT_CATEGORIES = ["行事", "外出", "来客", "その他"] as const;
+
 const createStaffEventInput = {
   title: z.string().min(1).max(100).describe("予定のタイトル（例: 檀信徒総会の準備）"),
-  category: z.enum(SHARED_EVENT_CATEGORIES).describe("カテゴリ"),
+  category: z.enum(MCP_EVENT_CATEGORIES).describe("カテゴリ（法要の予定は book_memorial_service で作る）"),
   start: z.string().describe('始まり（日本時間。"YYYY-MM-DD HH:MM"）'),
   end: z.string().describe('終わり（日本時間。"YYYY-MM-DD HH:MM"）'),
   assignees: z.array(z.string()).min(1).describe("担当者の名前か役職（1 人以上。ログインしないアルバイトなども指定できる）"),
