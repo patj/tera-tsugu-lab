@@ -211,5 +211,14 @@ export function appAIConsentVersion(manifest: AppManifest): string {
   return h.toString(16).padStart(8, "0");
 }
 
-/** Anthropic 社でのデータの扱いの説明（同意の画面に出す）。運用者が公開の前に規約で確かめて書き直す（spec.md §7） */
-export const APP_AI_PROVIDER_NOTE = "送った内容は、Anthropic 社の規約にもとづいて扱われます。";
+/**
+ * Anthropic 社でのデータの扱いの説明（同意の画面に出す。spec.md §7）
+ * 出典（2026-11-06 に確かめた）:
+ * - 保存の期間: https://privacy.claude.com/en/articles/7996866（2026-07-01 更新）
+ *   「API の入力と出力は、受け取ってから 30 日以内に削除する」。例外: 利用規約の違反の疑い（最長 2 年）、法令、ゼロデータ保持などの別の取り決め
+ * - 学習: https://privacy.claude.com/en/articles/7996868（2026-08-18 更新）
+ *   「商用の製品の入力と出力は、既定では学習に使わない」。例外: 利用者がフィードバックを送ったとき、学習への利用を許可したとき（このシステムはどちらもしない）
+ * 規約が変わることがあるので、公開の前と、ときどき確かめ直す
+ */
+export const APP_AI_PROVIDER_NOTE =
+  "Anthropic 社は、受け取った内容を 30 日以内に削除し、AI の学習には使いません（同社の商用の規約による。利用規約に反する疑いがあるときや、法令で求められるときは、より長く保存されることがあります）。";

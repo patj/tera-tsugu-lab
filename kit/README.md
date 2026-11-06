@@ -79,4 +79,3 @@ npm run typecheck    # 書き間違いがないか（何も出なければ OK）
 - 試す画面が開かない: `npm install` をもう一度実行し、`npm run dev` をやり直してください
 - AI が「キーがありません」と言う: `.env` に `ANTHROPIC_API_KEY` を書いて、`npm run dev` をやり直してください
 - Claude に「このキットの決まりに合っているか確かめて」と頼むと、`npm run apps:check` で確かめてくれます
-- わからないことは、キットをお渡しした担当者にお問い合わせください

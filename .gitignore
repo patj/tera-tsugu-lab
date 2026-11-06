@@ -47,3 +47,6 @@ next-env.d.ts
 
 # Claude Code の worktree
 /.claude/worktrees/
+
+# 先方（お寺さん）のアプリのモックとベータ版（別の git リポジトリへのシンボリックリンク。このリポジトリでは扱わない）
+/heartcloset
