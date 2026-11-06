@@ -1,6 +1,6 @@
 // 操作者。ドメイン層の関数は第 1 引数で受け取り、私的な予定の保護やポータルの権限の判定に使う。
-/** care: メンタルケアのポータル（匿名の相談者。spec.md §7） */
-export type Channel = "web" | "mcp" | "portal" | "care";
+/** apps: お寺のアプリの利用者（匿名。spec.md §7） */
+export type Channel = "web" | "mcp" | "portal" | "apps";
 
 export type Actor = {
   templeId: string;
@@ -10,8 +10,8 @@ export type Actor = {
   /** 檀家としてポータルから操作している場合 */
   portalAccountId?: string;
   personId?: string;
-  /** メンタルケアの相談者として操作している場合（匿名。ほかのアカウントとはひもづけない） */
-  careSubjectId?: string;
+  /** お寺のアプリの利用者として操作している場合（匿名。ほかのアカウントとはひもづけない） */
+  appUserId?: string;
   /** 監査ログに残す表示名 */
   label: string;
 };
@@ -43,13 +43,13 @@ export function portalActor(account: {
   };
 }
 
-/** メンタルケアの相談者。監査ログには、ニックネームではなく ID の先頭だけを残す */
-export function careActor(subject: { id: string; templeId: string }): Actor {
+/** お寺のアプリの利用者。監査ログには、ニックネームではなく ID の先頭だけを残す */
+export function appUserActor(user: { id: string; templeId: string }): Actor {
   return {
-    templeId: subject.templeId,
-    channel: "care",
-    careSubjectId: subject.id,
-    label: `care:相談者 ${subject.id.slice(0, 8)}`,
+    templeId: user.templeId,
+    channel: "apps",
+    appUserId: user.id,
+    label: `apps:利用者 ${user.id.slice(0, 8)}`,
   };
 }
 

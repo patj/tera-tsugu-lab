@@ -1,0 +1,4 @@
+// お寺のアプリ用の SDK。アプリは、ここ（@/apps-sdk）だけを import できる（apps/CLAUDE.md）。
+// DB に依存しない。保存、暗号化、共有の設定、監査ログは本体（src/domain/apps/）が受け持つ。spec.md §7
+export * from "./types";
+export { useAppStorage, type AppStorage } from "./storage";
