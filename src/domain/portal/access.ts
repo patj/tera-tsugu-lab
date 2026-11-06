@@ -27,6 +27,8 @@ export type PortalContext = {
   household: HouseholdBasics;
   role: PortalRole;
   isContact: boolean;
+  /** 世帯の窓口の名前（家族の画面で「窓口の〇〇さんが許可すると…」と案内する） */
+  contactName: string | null;
   can: PortalPermissions;
 };
 
@@ -65,7 +67,13 @@ export async function getPortalContext(actor: Actor, conn: DbOrTx = db): Promise
   if (!person || !household || household.status !== "active" || person.householdId !== household.id) {
     throw forbidden("このアカウントは使えません。お寺にお問い合わせください");
   }
-  return { account, person, household, ...resolvePermissions(account, household) };
+  const resolved = resolvePermissions(account, household);
+  const contact = resolved.isContact
+    ? person
+    : household.contactPersonId
+      ? await getLivingMember(household.contactPersonId, conn)
+      : null;
+  return { account, person, household, contactName: contact?.name ?? null, ...resolved };
 }
 
 export async function requireViewHousehold(actor: Actor, conn: DbOrTx = db): Promise<PortalContext> {
