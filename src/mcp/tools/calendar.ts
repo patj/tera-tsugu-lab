@@ -1,5 +1,6 @@
 // スタッフのカレンダー（calendar）の MCP ツール（spec.md §3.2、§4）
 // 私的な予定の内容の保護はドメイン層（getCalendar / getStaffBusyIntervals）が行う。ここでは表示の形に変えるだけ。
+// 法要の予定は、件名（「山田家 七回忌」）に家の名前が入るので返さず、「法要（回忌）」と場所（自宅・墓前は市まで）で表す（spec.md §4）
 import { z } from "zod";
 import { db } from "@/db/client";
 import {
@@ -25,8 +26,9 @@ import {
   parseJstDateTime,
   type Interval,
 } from "@/domain/core";
+import { getMemorialServiceOutlines, JOINT_SERVICE_LABEL, LOCATION_LABELS, type MemorialServiceOutline } from "@/domain/memorial";
 import { defineReadTool, defineWriteTool, type ToolContext, type ToolDef } from "../framework/define";
-import { adminUrl } from "../framework/present";
+import { adminUrl, cityOf } from "../framework/present";
 
 const WEEKDAYS = ["日", "月", "火", "水", "木", "金", "土"];
 
@@ -103,32 +105,46 @@ const checkStaffAvailability = defineReadTool({
 
 // ---- get_staff_calendar ----
 
-function eventToOutput(e: CalendarEvent, me: string, names: Map<string, string>) {
+/** 法要の予定の表し方: 「法要（七回忌・十三回忌、複数霊位供養）」と「ご自宅（武蔵野市）」 */
+function memorialOutput(o: MemorialServiceOutline | undefined) {
+  if (!o) return { タイトル: "法要" };
+  const city = o.location === "temple" ? null : cityOf(o.address);
+  const place = o.location === "home" ? "ご自宅" : LOCATION_LABELS[o.location];
+  return {
+    タイトル: `法要（${o.kaikiNames}${o.joint ? `、${JOINT_SERVICE_LABEL}` : ""}）`,
+    場所: city ? `${place}（${city}）` : place,
+  };
+}
+
+function eventToOutput(e: CalendarEvent, me: string, names: Map<string, string>, memorials: Map<string, MemorialServiceOutline>) {
   const time = formatInterval(e);
   if (e.kind === "busy") {
     return { date: formatDate(jstDateString(e.start)), 時間: time, スタッフ: [names.get(e.staffId) ?? "?"], 種類: "私的な予定", 内容: BUSY_LABEL };
   }
-  return {
+  const base = {
     date: formatDate(jstDateString(e.start)),
     時間: time,
     スタッフ: e.assignees.map((a) => `${a.roleTitle} ${a.name}`),
     種類: e.visibility === "shared" ? "業務の予定" : e.ownerStaffId === me ? "私的な予定（あなたの予定）" : "私的な予定",
     カテゴリ: e.category,
-    タイトル: e.title,
-    // 法要の予定の内容には、自宅・墓前の住所が入る。LLM には返さず、法要の管理画面の URL を添える
-    ...(e.memorialServiceId
-      ? { 法要: true, 管理画面: adminUrl(`/admin/memorial/services/${e.memorialServiceId}`) }
-      : e.body
-        ? { 内容: e.body }
-        : {}),
   };
+  // 法要の予定の件名には家の名前が、内容には故人の名前と住所が入る。LLM には返さず、法要の管理画面の URL を添える
+  if (e.memorialServiceId) {
+    return {
+      ...base,
+      ...memorialOutput(memorials.get(e.memorialServiceId)),
+      法要: true,
+      管理画面: adminUrl(`/admin/memorial/services/${e.memorialServiceId}`),
+    };
+  }
+  return { ...base, タイトル: e.title, ...(e.body ? { 内容: e.body } : {}) };
 }
 
 const getStaffCalendar = defineReadTool({
   name: "get_staff_calendar",
   description:
     "期間（日付）とスタッフを指定して、スタッフのカレンダーの予定を返す。スタッフを省略すると全員。" +
-    "業務の予定は、時間、担当者、内容のすべてを返す（法要の予定だけは内容を返さず、法要の管理画面の URL を返す）。" +
+    "業務の予定は、時間、担当者、内容のすべてを返す。法要の予定は、件名と内容を返さず、「法要（回忌）」と場所（自宅・墓前は市まで）と法要の管理画面の URL を返す（家の名前は管理画面で見てもらう）。" +
     "他のスタッフの私的な予定は「予定あり」と時間だけを返す（内容は推測して伝えない）。操作者本人の私的な予定は内容まで返す。",
   input: {
     from: dateArg,
@@ -140,11 +156,13 @@ const getStaffCalendar = defineReadTool({
     const staffIds = await staffIdsOf(ctx, args.staff);
     const view = await getCalendar(ctx.actor, { from: jst(from), to: jst(addDays(to, 1)), staffIds });
     const names = new Map(view.staff.map((s) => [s.id, `${s.roleTitle} ${s.name}`]));
+    const memorialIds = view.events.flatMap((e) => (e.kind === "detail" && e.memorialServiceId ? [e.memorialServiceId] : []));
+    const memorials = await getMemorialServiceOutlines(ctx.actor, memorialIds);
     return {
       期間: `${formatDate(from)}〜${formatDate(to)}`,
       staff: view.staff.map((s) => ({ name: s.name, role: s.roleTitle, 法要の担当者: s.isOfficiant })),
       件数: view.events.length,
-      events: view.events.map((e) => eventToOutput(e, ctx.actor.staffId, names)),
+      events: view.events.map((e) => eventToOutput(e, ctx.actor.staffId, names, memorials)),
     };
   },
 });

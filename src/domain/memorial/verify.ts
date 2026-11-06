@@ -6,7 +6,7 @@
 import { and, eq } from "drizzle-orm";
 import { db, type DbOrTx } from "@/db/client";
 import { persons } from "@/db/schema";
-import { getTemple, invalid, parseDateString, todayJst, type Actor, type SectPreset } from "@/domain/core";
+import { getTemple, hidesNames, invalid, parseDateString, todayJst, type Actor, type SectPreset } from "@/domain/core";
 import {
   HOUSEHOLD_STATUS_LABELS,
   isMemorialKaiki,
@@ -22,6 +22,7 @@ import {
   assertStaff,
   checkDate,
   checkKaiki,
+  deceasedLabel,
   fullName,
   personsByIds,
   requireHousehold,
@@ -55,6 +56,8 @@ export type JointCandidate = {
   name: string;
   homyo: string | null;
   relation: string | null;
+  /** "YYYY-MM-DD" */
+  deathDate: string;
   kaiki: number;
   kaikiName: string;
   meinichi: string;
@@ -174,6 +177,7 @@ export async function verifyMemorial(
 ): Promise<VerifyMemorialResult> {
   assertStaff(actor);
   checkInput(input);
+  const hide = hidesNames(actor);
   const today = input.today ?? todayJst();
   const preset = (await getTemple(actor.templeId, conn)).preset;
 
@@ -183,10 +187,14 @@ export async function verifyMemorial(
   let identityMessage: string;
   if (input.personId) {
     person = await requirePerson(actor.templeId, input.personId, conn);
-    if (!person.isDeceased || !person.deathDate) throw invalid(`${fullName(person)}さんは故人として登録されていません`);
+    if (!person.isDeceased || !person.deathDate) {
+      throw invalid(hide ? "指定した方は、故人として登録されていません" : `${fullName(person)}さんは故人として登録されていません`);
+    }
     const h = await requireHousehold(actor.templeId, person.householdId, conn);
     household = { id: h.id, name: h.name, address: h.address, statusLabel: statusLabelOf(h.status) };
-    identityMessage = `${household.name}の${person.relation ?? ""} ${fullName(person)}（${person.homyo ?? "法号なし"}、${person.deathDate} 没）として確認します`;
+    identityMessage = hide
+      ? `${person.relation || "故人"}（${deathYear(person)} 年没）として確認します`
+      : `${household.name}の${person.relation ?? ""} ${fullName(person)}（${person.homyo ?? "法号なし"}、${person.deathDate} 没）として確認します`;
   } else {
     if (!input.name?.trim() && !input.relation?.trim() && !input.homyo?.trim() && !input.householdId) {
       throw invalid("故人を決めるために、person_id か、俗名・続柄・法号・世帯のどれかを指定してください");
@@ -225,14 +233,18 @@ export async function verifyMemorial(
         status: "needs_identification",
         message:
           `当てはまる故人が ${candidates.length} 人います。自動では 1 人に決めません。` +
-          "法号・没年・世帯（住所）を住職に伝えて、どの方かを確かめてください",
+          (hide
+            ? "世帯の町名・続柄・没年を住職に伝えて、どの方かを確かめてください"
+            : "法号・没年・世帯（住所）を住職に伝えて、どの方かを確かめてください"),
         candidates,
       };
     }
     const c = found[0];
     person = await requirePerson(actor.templeId, c.personId, conn);
     household = { id: c.household.id, name: c.household.name, address: c.household.address, statusLabel: c.household.statusLabel };
-    identityMessage = `当てはまる故人は 1 人です: ${household.name}の${person.relation ?? ""} ${fullName(person)}（${person.homyo ?? "法号なし"}、${person.deathDate} 没）。念のため法号を住職と確かめてください`;
+    identityMessage = hide
+      ? `当てはまる故人は 1 人です: ${person.relation || "故人"}（${deathYear(person)} 年没）。念のため世帯の町名と続柄を住職と確かめてください`
+      : `当てはまる故人は 1 人です: ${household.name}の${person.relation ?? ""} ${fullName(person)}（${person.homyo ?? "法号なし"}、${person.deathDate} 没）。念のため法号を住職と確かめてください`;
   }
 
   const deathDate = person.deathDate!;
@@ -300,14 +312,20 @@ export async function verifyMemorial(
     .flatMap((o) => {
       const m = memorialInYear(o.deathDate!, year, preset);
       return m
-        ? [{ personId: o.id, name: fullName(o), homyo: o.homyo, relation: o.relation, kaiki: m.kaiki, kaikiName: m.kaikiName, meinichi: m.meinichi }]
+        ? [{ personId: o.id, name: fullName(o), homyo: o.homyo, relation: o.relation, deathDate: o.deathDate!, kaiki: m.kaiki, kaikiName: m.kaikiName, meinichi: m.meinichi }]
         : [];
     })
     .sort((a, b) => a.meinichi.localeCompare(b.meinichi));
   const jointMessage =
     joint.length > 0
       ? `同じ世帯に、${year} 年に年忌を迎える故人がほかにいます: ` +
-        joint.map((j) => `${j.relation ?? ""} ${j.name}（${j.homyo ?? "法号なし"}）の${j.kaikiName}（祥月命日 ${md(j.meinichi)}）`).join("、") +
+        joint
+          .map((j) =>
+            hide
+              ? `${j.relation || "故人"}（${j.deathDate.slice(0, 4)} 年没）の${j.kaikiName}（祥月命日 ${md(j.meinichi)}）`
+              : `${j.relation ?? ""} ${j.name}（${j.homyo ?? "法号なし"}）の${j.kaikiName}（祥月命日 ${md(j.meinichi)}）`,
+          )
+          .join("、") +
         `。あわせて営む（${JOINT_SERVICE_LABEL}）ことを提案できます`
       : `同じ世帯に、${year} 年に年忌を迎えるほかの故人はいません`;
 
@@ -330,9 +348,11 @@ export async function verifyMemorial(
 
 /** 確定のときの注意（回忌の食い違い、命日より後の日）。プレビューと管理画面で使う */
 export function bookingWarnings(
-  targets: { name: string; deathDate: string | null; kaiki: number }[],
+  targets: { name: string; relation: string | null; deathDate: string | null; kaiki: number }[],
   date: string,
   preset: SectPreset,
+  /** MCP の操作者のとき true（名前を文に入れない） */
+  hide = false,
 ): string[] {
   const year = parseDateString(date).year;
   const out: string[] = [];
@@ -341,11 +361,11 @@ export function bookingWarnings(
     const actual = kaikiOfYear(t.deathDate, year);
     if (actual !== t.kaiki) {
       out.push(
-        `${t.name}さんの${kaikiName(t.kaiki, preset)}は ${yearOfKaiki(t.deathDate, t.kaiki)} 年です（${year} 年は${actual >= 1 ? kaikiName(actual, preset) : "没年より前"}）`,
+        `${deceasedLabel(hide, t)}の${kaikiName(t.kaiki, preset)}は ${yearOfKaiki(t.deathDate, t.kaiki)} 年です（${year} 年は${actual >= 1 ? kaikiName(actual, preset) : "没年より前"}）`,
       );
     }
     const meinichi = shoutsukiMeinichi(t.deathDate, year);
-    if (date > meinichi) out.push(`${md(date)} は、${t.name}さんの祥月命日（${md(meinichi)}）より後です（受け付けはできます）`);
+    if (date > meinichi) out.push(`${md(date)} は、${deceasedLabel(hide, t)}の祥月命日（${md(meinichi)}）より後です（受け付けはできます）`);
   }
   return out;
 }

@@ -80,7 +80,7 @@ export type FindMemorialSlotsResult = {
   /** 調べた担当者 */
   officiants: SlotOfficiant[];
   /** 故人の祥月命日（調べた年ごと） */
-  meinichi: { personId: string; name: string; year: number; meinichi: string }[];
+  meinichi: { personId: string; name: string; relation: string | null; deathDate: string; year: number; meinichi: string }[];
   /** 調べた日（重なりを除いて日付の順） */
   dates: string[];
 };
@@ -184,7 +184,14 @@ export async function findMemorialSlots(
   );
   const years = [...new Set(dates.map((d) => parseDateString(d).year))];
   const meinichi = years.flatMap((year) =>
-    targets.map((p) => ({ personId: p.id, name: fullName(p), year, meinichi: shoutsukiMeinichi(p.deathDate!, year) })),
+    targets.map((p) => ({
+      personId: p.id,
+      name: fullName(p),
+      relation: p.relation,
+      deathDate: p.deathDate!,
+      year,
+      meinichi: shoutsukiMeinichi(p.deathDate!, year),
+    })),
   );
   const earliestMeinichi = new Map<number, string>();
   for (const m of meinichi) {

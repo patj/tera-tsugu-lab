@@ -3,7 +3,7 @@
 import { and, eq, inArray } from "drizzle-orm";
 import { db, type DbOrTx } from "@/db/client";
 import { households, persons, staff } from "@/db/schema";
-import { forbidden, invalid, isStaff, notFound, parseDateString, type Actor } from "@/domain/core";
+import { forbidden, hidesNames, invalid, isStaff, notFound, parseDateString, type Actor } from "@/domain/core";
 import { kaikiName } from "@/domain/ledger";
 import { MAX_TARGETS, type TargetView } from "./types";
 
@@ -15,6 +15,20 @@ export type HouseholdRow = typeof households.$inferSelect;
 
 export function fullName(p: { familyName: string; givenName: string }): string {
   return `${p.familyName} ${p.givenName}`;
+}
+
+/**
+ * 文の中で故人を指す言い方。管理画面では「山田 太郎さん」、MCP では「父（2021 年没）」（名前を LLM に渡さない。spec.md §4）。
+ * 後ろに「の七回忌」「の祥月命日」などを続けて使う
+ */
+export function deceasedLabel(hide: boolean, p: { name: string; relation: string | null; deathDate: string | null }): string {
+  if (!hide) return `${p.name}さん`;
+  return `${p.relation || "故人"}${p.deathDate ? `（${p.deathDate.slice(0, 4)} 年没）` : ""}`;
+}
+
+/** 操作者に合わせた deceasedLabel */
+export function deceasedLabelFor(actor: Actor, p: { name: string; relation: string | null; deathDate: string | null }): string {
+  return deceasedLabel(hidesNames(actor), p);
 }
 
 /** スタッフだけができる操作（管理画面、MCP） */

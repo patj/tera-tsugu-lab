@@ -1,12 +1,25 @@
 // MCP のツールの結果とプレビュー（どちらも LLM に送られる）に、返さないと決めた情報が入らないことを確かめる（spec.md §4「LLM に渡す情報」）。
-// シードの連絡先（住所の番地、電話、携帯、メール）、生年月日、自由記述（対応記録の本文、申し込みの連絡事項、施設の予約の内容、台帳のメモ）、
+// シードの連絡先（住所の番地、電話、携帯、メール）、生年月日、自由記述（対応記録の本文、申し込みの連絡事項、施設の予約の件名と内容、台帳のメモ）、
+// 檀家の名前（故人の俗名と法号、生きている家族の名前）、施設の予約の申請者の名前（伏せる前）、法要の予定の件名、
 // フォームの回答の値（選択肢の文字は集計に出るので除く）を集め、
 // 読み取りのツールと書き込みのツールのプレビューを一通り呼んで、どの文字列も結果に出てこないことを見る。
 // ドメイン層が作る文（注意やチェックのメッセージ）から漏れる場合も、ここで見つかる。
+// 家の名前は、その呼び出しの引数に家の名前（「家」を除いた部分）が入っていないときは、結果に入らないことを確かめる（call が毎回確かめる）。
 import assert from "node:assert/strict";
 import { after, before, describe, it } from "node:test";
 import { closeDb, db } from "@/db/client";
-import { contactLogs, contacts, formQuestions, formResponses, households, memorialRequests, persons, reservations } from "@/db/schema";
+import { isNotNull } from "drizzle-orm";
+import {
+  contactLogs,
+  contacts,
+  formQuestions,
+  formResponses,
+  households,
+  memorialRequests,
+  persons,
+  reservations,
+  staffEvents,
+} from "@/db/schema";
 import type { SeedContext } from "@/db/seed/context";
 import { getStaffById, staffActor } from "@/domain/core";
 import type { ToolContext } from "@/mcp/framework/define";
@@ -25,19 +38,38 @@ let runtime: ToolRuntime;
 let ctx: ToolContext;
 /** [何の値か, 値] */
 let secrets: [string, string][];
+/** 世帯の名前（「山田家」） */
+let householdNames: string[];
 
 function data(r: ToolResult): Obj {
   assert.equal(r.ok, true, r.ok ? "" : r.error);
   return (r as { data: Obj }).data;
 }
 
-async function call(name: string, args: Obj): Promise<Obj> {
-  return data(await runtime.call(name, args, ctx));
+const compact = (v: string) => v.replace(/[\s　]/g, "");
+
+/** 引数に入っていない家の名前が、結果に入っていないこと */
+function assertNoUnaskedHouseholdNames(label: string, args: Obj, out: unknown) {
+  const asked = compact(JSON.stringify(args));
+  const json = JSON.stringify(out);
+  for (const name of householdNames) {
+    if (asked.includes(name.replace(/家$/, ""))) continue;
+    assert.ok(!json.includes(name), `${label} の結果に、引数にない家の名前が入っている: ${name}`);
+  }
 }
 
-function assertNoSecrets(label: string, out: unknown) {
+async function call(name: string, args: Obj): Promise<Obj> {
+  const out = data(await runtime.call(name, args, ctx));
+  assertNoUnaskedHouseholdNames(name, args, out);
+  return out;
+}
+
+/** args: 住職が入力した引数。引数に入っている値（住職が言ったもの）は、結果に出てもよい */
+function assertNoSecrets(label: string, out: unknown, args?: Obj) {
   const json = JSON.stringify(out);
+  const given = args ? JSON.stringify(args) : "";
   for (const [what, value] of secrets) {
+    if (given.includes(value)) continue;
     assert.ok(!json.includes(value), `${label} の結果に${what}が入っている: ${value}`);
   }
 }
@@ -51,11 +83,19 @@ async function collectSecrets(): Promise<[string, string][]> {
   }
   for (const p of await db.select().from(persons)) {
     list.push(["携帯", p.mobilePhone], ["メール", p.email], ["生年月日", p.birthDate], ["個人のメモ", p.notes]);
+    const who = p.isDeceased ? "故人の俗名" : "家族の名前";
+    list.push([who, `${p.familyName} ${p.givenName}`], [who, `${p.familyName}${p.givenName}`], ["法号", p.homyo]);
   }
-  for (const c of await db.select().from(contacts)) list.push(["一般コンタクトの電話", c.phone], ["一般コンタクトのメール", c.email]);
+  for (const c of await db.select().from(contacts)) {
+    list.push(["一般コンタクトの電話", c.phone], ["一般コンタクトのメール", c.email]);
+    list.push(["申請者の名前（伏せる前）", c.name.replace(/[（(].*$/, "").trim()]);
+  }
   for (const l of await db.select().from(contactLogs)) list.push(["対応記録の本文", l.body]);
   for (const r of await db.select().from(memorialRequests)) list.push(["申し込みの連絡事項", r.notes]);
-  for (const r of await db.select().from(reservations)) list.push(["施設の予約の内容", r.notes]);
+  for (const r of await db.select().from(reservations)) list.push(["施設の予約の内容", r.notes], ["施設の予約の件名", r.title]);
+  for (const e of await db.select().from(staffEvents).where(isNotNull(staffEvents.memorialServiceId))) {
+    list.push(["法要の予定の件名", e.title]);
+  }
   // フォームの回答: 文字列の値をすべて集める（選択肢の文字は集計に出るので除く）
   const options = new Set<string>();
   for (const q of await db.select().from(formQuestions)) {
@@ -79,29 +119,49 @@ describe("MCP のツールは、返さないと決めた情報を LLM に返さ�
     const jushoku = (await getStaffById(seed.get("staff:jushoku")))!;
     ctx = { actor: { ...staffActor(jushoku, "mcp"), staffId: jushoku.id }, now: NOW };
     secrets = await collectSecrets();
+    householdNames = (await db.select().from(households)).map((h) => h.name);
     // 確かめる値がシードに十分あること（シードが変わって空振りしないように）
     const kinds = new Set(secrets.map(([what]) => what));
-    for (const k of ["世帯の電話", "携帯", "生年月日", "対応記録の本文", "施設の予約の内容", "フォームの回答"]) assert.ok(kinds.has(k), `シードに${k}がない`);
+    for (const k of [
+      "世帯の電話",
+      "携帯",
+      "生年月日",
+      "対応記録の本文",
+      "施設の予約の内容",
+      "フォームの回答",
+      "故人の俗名",
+      "家族の名前",
+      "法号",
+      "申請者の名前（伏せる前）",
+      "施設の予約の件名",
+      "法要の予定の件名",
+    ]) {
+      assert.ok(kinds.has(k), `シードに${k}がない`);
+    }
   });
   after(async () => {
     await closeDb();
   });
 
   it("台帳: search_households、get_household、search_deceased、list_upcoming_memorials", async () => {
+    // 検索語が空なら、家の名前は返さず ID だけ。そのあと ID で詳細を取っても、家の名前は返らない
     const found = await call("search_households", { query: "" });
     assertNoSecrets("search_households", found);
-    const list = found["世帯"] as Obj[];
-    assert.ok(list.length >= 3);
-    assert.ok(list.every((h) => typeof h["管理画面"] === "string"));
-    for (const h of list) assertNoSecrets("get_household", await call("get_household", { household_id: h["household_id"] }));
+    assert.deepEqual(found["世帯"], []);
+    const ids = (found["名前を伏せた世帯"] as Obj)["household_id"] as string[];
+    assert.ok(ids.length >= 3);
+    for (const id of ids) assertNoSecrets("get_household", await call("get_household", { household_id: id }));
 
-    // 電話番号で探せる（結果に番号は出ない）
-    const byPhone = await call("search_households", { query: "0422-55-0101" });
-    assert.equal((byPhone["世帯"] as Obj[]).length, 1);
-    assertNoSecrets("search_households（電話番号で検索）", byPhone);
+    // 電話番号で探せる（結果に番号も家の名前も出ない）
+    const phoneArgs = { query: "0422-55-0101" };
+    const byPhone = await call("search_households", phoneArgs);
+    assert.equal(byPhone["件数"], 1);
+    assertNoSecrets("search_households（電話番号で検索）", byPhone, phoneArgs);
+    assertNoSecrets("search_households（名字で検索）", await call("search_households", { query: "山田" }));
 
     assertNoSecrets("search_deceased", await call("search_deceased", { name: "山田" }));
     assertNoSecrets("search_deceased", await call("search_deceased", { relation: "父" }));
+    assertNoSecrets("search_deceased（法号で検索）", await call("search_deceased", { homyo: "院" }));
     assertNoSecrets("list_upcoming_memorials", await call("list_upcoming_memorials", { from: "2026-11-01", to: "2027-10-31" }));
   });
 
@@ -113,7 +173,7 @@ describe("MCP のツールは、返さないと決めた情報を LLM に返さ�
     // 同じ名字の 2 つの山田家を、地域（町名）で見分けられる
     const areas = candidates.map((c) => (c["世帯"] as Obj)["地域"]);
     assert.deepEqual([...areas].sort(), ["武蔵野市北町", "武蔵野市本町"]);
-    const taro = candidates.find((c) => c["俗名"] === "山田 太郎")!;
+    const taro = candidates.find((c) => c["person_id"] === seed.get("person:yamada:father"))!;
 
     const ok = await call("verify_memorial", {
       person_id: taro["person_id"],
@@ -126,6 +186,18 @@ describe("MCP のツールは、返さないと決めた情報を LLM に返さ�
     const requests = await call("list_memorial_requests", { status: "all" });
     assertNoSecrets("list_memorial_requests", requests);
     assert.ok((requests["申し込み"] as Obj[]).length > 0);
+    for (const r of requests["申し込み"] as Obj[]) {
+      if (r["状態"] !== "受付済み") continue;
+      const rid = r["memorial_request_id"];
+      assertNoSecrets(
+        "find_memorial_slots（申し込みから）",
+        await call("find_memorial_slots", { memorial_request_id: rid, travel_before_min: 30, travel_after_min: 30 }),
+      );
+      assertNoSecrets(
+        "decline_memorial_request のプレビュー",
+        await call("decline_memorial_request", { memorial_request_id: rid, reason: "その時期はお伺いできません" }),
+      );
+    }
 
     const home = { location: "home", travel_before_min: 30, travel_after_min: 30 };
     const slots = await call("find_memorial_slots", { from: "2027-03-01", to: "2027-03-31", person_ids: [taro["person_id"]], ...home });
@@ -189,9 +261,29 @@ describe("MCP のツールは、返さないと決めた情報を LLM に返さ�
     }
   });
 
-  it("add_contact_log のプレビューは、世帯の住所を町名までにする", async () => {
+  it("add_contact_log のプレビューは、世帯を町名で示す（家の名前は引数に入っているときだけ）", async () => {
     const p = await call("add_contact_log", { household_id: seed.get("household:tanaka"), kind: "案内", body: "法要のご案内をした" });
     assertNoSecrets("add_contact_log のプレビュー", p);
-    assert.match(p.preview as string, /田中家（武蔵野市栄町）/);
+    assert.match(p.preview as string, /武蔵野市栄町の世帯に対応記録を追加します/);
+    const named = await call("add_contact_log", { household_id: seed.get("household:tanaka"), kind: "案内", body: "田中さんに法要のご案内をした" });
+    assert.match(named.preview as string, /武蔵野市栄町の田中家に対応記録を追加します/);
+  });
+
+  it("法要の重複の登録のエラーにも、故人の名前を入れない", async () => {
+    const r = await runtime.call(
+      "book_memorial_service",
+      {
+        household_id: seed.get("household:sato"),
+        targets: [{ person_id: seed.get("person:sato:father"), kaiki: 7 }],
+        date: "2026-12-12",
+        time: "10:00",
+        officiant: "住職",
+      },
+      ctx,
+    );
+    assert.equal(r.ok, false);
+    const msg = (r as { error: string }).error;
+    assertNoSecrets("book_memorial_service のエラー", msg);
+    assert.match(msg, /父（2020 年没）の七回忌は、すでに/);
   });
 });

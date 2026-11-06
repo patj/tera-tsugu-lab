@@ -13,6 +13,7 @@ import {
   forbidden,
   formatJst,
   getTemple,
+  hidesNames,
   invalid,
   jstDateString,
   jstTimeString,
@@ -33,6 +34,7 @@ import {
 import {
   assertStaff,
   checkTargets,
+  deceasedLabelFor,
   fullName,
   householdsByIds,
   isUuid,
@@ -97,7 +99,7 @@ export type MemorialBookingPlan = {
   targets: TargetView[];
   /** 複数霊位供養か（故人が 2 人以上） */
   joint: boolean;
-  seshu: { seshuPersonId: string | null; seshuName: string | null; display: string | null };
+  seshu: { seshuPersonId: string | null; seshuName: string | null; display: string | null; relation: string | null };
   location: MemorialLocation;
   start: Date;
   end: Date;
@@ -207,7 +209,7 @@ export async function planMemorialBooking(
     );
   for (const t of targets) {
     const d = dup.find((x) => x.personId === t.personId && x.kaiki === t.kaiki);
-    if (d) throw conflict(`${t.name}さんの${t.kaikiName}は、すでに ${formatJst(d.startAt)} に登録されています`);
+    if (d) throw conflict(`${deceasedLabelFor(actor, t)}の${t.kaikiName}は、すでに ${formatJst(d.startAt)} に登録されています`);
   }
 
   // ---- 空きの確かめ直し ----
@@ -235,11 +237,12 @@ export async function planMemorialBooking(
   }
 
   const warnings = bookingWarnings(
-    targets.map((t) => ({ name: t.name, deathDate: t.deathDate, kaiki: t.kaiki })),
+    targets.map((t) => ({ name: t.name, relation: t.relation, deathDate: t.deathDate, kaiki: t.kaiki })),
     jstDateString(start),
     temple.preset,
+    hidesNames(actor),
   );
-  if (household.status !== "active") warnings.push(`${household.name}は、離檀・転出の世帯です`);
+  if (household.status !== "active") warnings.push(`${hidesNames(actor) ? "この世帯" : household.name}は、離檀・転出の世帯です`);
 
   const title = serviceTitle(household.name, targets);
   const holdNote =
@@ -598,4 +601,40 @@ export async function getMemorialService(actor: Actor, id: string, conn: DbOrTx 
     staffEvents,
     reservations,
   };
+}
+
+/** 法要の予定を、名前を出さずに表すための情報（02 の MCP の get_staff_calendar が使う。spec.md §4「LLM に渡す情報」） */
+export type MemorialServiceOutline = {
+  id: string;
+  /** "七回忌・十三回忌" */
+  kaikiNames: string;
+  joint: boolean;
+  location: MemorialLocation;
+  /** 自宅・墓前のときの場所の住所（番地まで入る。表示する側で市までにする）。お寺のときと、わからないときは null */
+  address: string | null;
+};
+
+/** 法要の ID から、回忌と場所を取る（スタッフ用）。見つからない ID は結果に入らない */
+export async function getMemorialServiceOutlines(
+  actor: Actor,
+  ids: string[],
+  conn: DbOrTx = db,
+): Promise<Map<string, MemorialServiceOutline>> {
+  assertStaff(actor);
+  const valid = [...new Set(ids.filter(isUuid))];
+  if (valid.length === 0) return new Map();
+  const rows = await conn
+    .select()
+    .from(memorialServices)
+    .where(and(eq(memorialServices.templeId, actor.templeId), inArray(memorialServices.id, valid)));
+  const summaries = await toSummaries(rows, conn);
+  const hh = await householdsByIds(rows.map((r) => r.householdId), conn);
+  return new Map(
+    summaries.map((s) => {
+      const row = rows.find((r) => r.id === s.id)!;
+      const address = s.location === "home" ? (hh.get(row.householdId)?.address ?? null) : null;
+      const kaikiNames = [...new Set(s.targets.map((t) => t.kaikiName))].join("・");
+      return [s.id, { id: s.id, kaikiNames, joint: s.joint, location: s.location, address }];
+    }),
+  );
 }

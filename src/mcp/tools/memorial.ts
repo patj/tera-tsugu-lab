@@ -2,7 +2,8 @@
 //   verify_memorial、find_memorial_slots、list_memorial_requests、book_memorial_service、decline_memorial_request
 // 台本の場面 0 の流れ: 故人の特定 → 検証（verify_memorial）→ 候補（find_memorial_slots）→ 確定（book_memorial_service → confirm_action）
 // 業務のロジックはドメイン層（@/domain/memorial）にある。ここでは引数を受け取り、表示の形に変えるだけ。
-// LLM には会話を進めるのに必要な最小限だけを返す（住所は町名まで。電話と申し込みの連絡事項は返さず、管理画面の URL を添える）
+// LLM には名前を返さない（spec.md §4「LLM に渡す情報」）。故人と家族は続柄と没年で指し、家の名前は引数と合うときだけ返す。
+// 住所は町名まで。電話と申し込みの連絡事項も返さず、管理画面の URL を添える
 import { z } from "zod";
 import { resolveStaff } from "@/domain/calendar";
 import { formatJst, invalid, jst, jstDateString, jstParts, jstTimeString, parseDateString, type Interval } from "@/domain/core";
@@ -25,7 +26,7 @@ import {
   type VerifyCandidate,
 } from "@/domain/memorial";
 import { defineReadTool, defineWriteTool, type ToolContext, type ToolDef } from "../framework/define";
-import { adminUrl, areaOf, SEE_ADMIN } from "../framework/present";
+import { adminUrl, areaOf, householdLabel, personLabel, relationLabel, SEE_ADMIN } from "../framework/present";
 
 const WEEKDAYS = ["日", "月", "火", "水", "木", "金", "土"];
 const dateLabel = (date: string) => `${date}（${WEEKDAYS[jstParts(jst(date)).weekday]}）`;
@@ -83,8 +84,17 @@ const kaikiArg = z
   .describe("回忌の数字。一周忌は 2、三回忌は 3、七回忌は 7、十三回忌は 13（亡くなった年を 1 回忌と数える）");
 
 function targetOut(t: TargetView) {
-  return { person_id: t.personId, 俗名: t.name, 法号: t.homyo, 続柄: t.relation, 没年: yearOf(t.deathDate), 回忌: t.kaiki, 呼び名: t.kaikiName };
+  return { person_id: t.personId, 続柄: t.relation, 没年: yearOf(t.deathDate), 回忌: t.kaiki, 呼び名: t.kaikiName };
 }
+
+/** 施主を名前を出さずに表す（「長男」「台帳にない方」） */
+function seshuLabel(s: { relation: string | null; personId: string | null; name: string | null }): string | null {
+  if (s.personId) return relationLabel(s.relation);
+  return s.name ? "台帳にない方（名前は管理画面で確認）" : null;
+}
+
+const serviceLabel = (targets: { kaikiName: string }[], joint: boolean) =>
+  `法要（${[...new Set(targets.map((t) => t.kaikiName))].join("・")}${joint ? `、${JOINT_SERVICE_LABEL}` : ""}）`;
 
 async function officiantIds(ctx: ToolContext, names: string[] | undefined): Promise<string[] | undefined> {
   if (!names || names.length === 0) return undefined;
@@ -93,16 +103,14 @@ async function officiantIds(ctx: ToolContext, names: string[] | undefined): Prom
 
 // ---- verify_memorial ----
 
-function candidateOut(c: VerifyCandidate) {
+function candidateOut(c: VerifyCandidate, args: unknown) {
   return {
     person_id: c.personId,
-    法号: c.homyo,
-    俗名: c.name,
     続柄: c.relation,
     没年: c.deathYear,
     世帯: {
       household_id: c.household.id,
-      名前: c.household.name,
+      呼び方: householdLabel(c.household, args),
       地域: areaOf(c.household.address),
       状態: c.household.statusLabel,
       管理画面: adminUrl(`/admin/ledger/households/${c.household.id}`),
@@ -117,7 +125,8 @@ const verifyMemorialTool = defineReadTool({
   description:
     "年忌法要の依頼（例: 「山田さんから、お父さんの七回忌を 3 月にやりたいと連絡があった」）を受けたら、最初に呼ぶ。次の 4 つを確かめる。\n" +
     "1. 故人の特定: person_id がわからなければ、name（名字など）と relation（「お父さん」→「父」）で呼ぶ。" +
-    "候補が複数なら status が「要確認」になり、法号・没年・世帯（地域）・その年の回忌が並ぶ。自分で 1 人に決めず、住職に「どちらの方か」を確かめてから、person_id を指定して呼び直す。\n" +
+    "候補が複数なら status が「要確認」になり、続柄・没年・世帯（地域）・その年の回忌が並ぶ。自分で 1 人に決めず、住職に「どちらの方か」を確かめてから、person_id を指定して呼び直す。" +
+    "俗名と法号は返さない（住職に聞かれたら管理画面の URL を案内する）。家の名前は、引数の name と合うときだけ返る。\n" +
     "2. 回忌と年: 希望の年が何回忌かを計算し、依頼の回忌と食い違えば指摘する。\n" +
     "3. 祥月命日: 希望日がその年の祥月命日より後なら注意を出す（法要は命日より前に繰り上げるのが一般的。受け付けはできる）。\n" +
     "4. 複数霊位供養: 同じ世帯に、同じ年に年忌を迎える故人がほかにいれば、あわせて営む（複数霊位供養）ことを提案できるように返す。住職に提案し、あわせるかどうかを尋ねる。\n" +
@@ -157,14 +166,14 @@ const verifyMemorialTool = defineReadTool({
       return {
         status: "要確認",
         メッセージ: r.message,
-        候補: r.candidates.map(candidateOut),
-        次にすること: "候補を法号・没年・世帯（地域）で住職に伝え、どの方かを確かめてから、person_id を指定して verify_memorial を呼び直す",
+        候補: r.candidates.map((c) => candidateOut(c, args)),
+        次にすること: "候補を世帯の地域・続柄・没年で住職に伝え、どの方かを確かめてから、person_id を指定して verify_memorial を呼び直す",
       };
     }
     const c = r.checks;
     return {
       status: "確認済み",
-      故人: candidateOut(r.person),
+      故人: candidateOut(r.person, args),
       年: r.year,
       回忌: r.kaiki,
       呼び名: r.kaikiName,
@@ -177,9 +186,8 @@ const verifyMemorialTool = defineReadTool({
       },
       複数霊位供養の候補: c.joint.candidates.map((j) => ({
         person_id: j.personId,
-        俗名: j.name,
-        法号: j.homyo,
         続柄: j.relation,
+        没年: yearOf(j.deathDate),
         回忌: j.kaiki,
         呼び名: j.kaikiName,
         祥月命日: dateLabel(j.meinichi),
@@ -260,9 +268,9 @@ const findMemorialSlotsTool = defineReadTool({
         場所: LOCATION_LABELS[location],
         押さえ方: holdText,
         調べた担当者: r.officiants.map((o) => `${o.roleTitle} ${o.name}`),
-        申し込み: req ? { memorial_request_id: req.id, 世帯: req.householdName } : undefined,
+        申し込み: req ? { memorial_request_id: req.id } : undefined,
       },
-      祥月命日: r.meinichi.map((m) => `${m.name}: ${dateLabel(m.meinichi)}`),
+      祥月命日: r.meinichi.map((m) => `${personLabel(m)}: ${dateLabel(m.meinichi)}`),
       候補の件数: r.total,
       担当者ごとの候補の件数: perOfficiant,
       候補: [...byDate.entries()].map(([date, slots]) => ({
@@ -291,9 +299,9 @@ function requestOut(r: MemorialRequestView) {
     受付: formatJst(r.createdAt),
     経路: REQUEST_SOURCE_LABELS[r.source],
     状態: REQUEST_STATUS_LABELS[r.status],
-    世帯: { household_id: r.householdId, 名前: r.householdName, 地域: areaOf(r.householdAddress) },
-    申し込んだ人: r.requestedByName ?? r.staffName,
-    施主: r.seshuDisplay,
+    household_id: r.householdId,
+    申し込んだ人: r.source === "portal" ? relationLabel(r.requestedByRelation) : r.staffName,
+    施主: seshuLabel({ relation: r.seshuRelation, personId: r.seshuPersonId, name: r.seshuName }),
     故人: r.targets.map(targetOut),
     複数霊位供養: r.targets.length > 1,
     希望の時期: r.preferredPeriods.map(
@@ -322,7 +330,7 @@ const listMemorialRequestsTool = defineReadTool({
   description:
     "檀家ポータルや電話で受けた、法要の申し込みの一覧。「新しい法要の申し込みはある？」と聞かれたら、status を省略して（受付済みだけ）呼ぶ。" +
     "受付済みの申し込みは、古い順（先に来たものから）に並ぶ。故人ごとの回忌、希望の時期（第 1〜第 3 希望）、場所、参列の人数、お斎を返す。" +
-    "連絡事項の本文と世帯の連絡先は返さない（連絡事項があれば「あり」と返すので、住職に「管理画面」の URL で確かめてもらう）。" +
+    "家の名前、施主や申し込んだ人の名前、故人の名前と法号、連絡事項の本文と世帯の連絡先は返さない（どちらのお家かや連絡事項は、住職に「管理画面」の URL で確かめてもらう）。" +
     "日時を決めるときは find_memorial_slots に memorial_request_id を渡して候補を出し、住職が選んだら book_memorial_service に memorial_request_id を渡す。" +
     "断るときは decline_memorial_request（理由が必須）。",
   input: {
@@ -394,30 +402,31 @@ async function toBookingInput(args: BookArgs, ctx: ToolContext) {
   };
 }
 
-function previewOf(plan: MemorialBookingPlan): string {
+function previewOf(plan: MemorialBookingPlan, args: unknown): string {
   const officiant = `${plan.officiant.roleTitle} ${plan.officiant.name}`;
-  const targets = plan.targets.map((t) => `${t.relation ?? ""} ${t.name}（${t.homyo ?? "法号なし"}）の${t.kaikiName}`).join("、");
+  const targets = plan.targets.map((t) => `${personLabel(t)}の${t.kaikiName}`).join("、");
   const holdNote =
     plan.location === "temple"
       ? `前後の準備と片付け ${plan.bufferMin} 分ずつを含む`
       : `行き ${plan.travelBeforeMin} 分・帰り ${plan.travelAfterMin} 分の移動時間を含む`;
   const lines = [
     "次の内容で法要を登録します（まだ登録していません）。",
-    `■ 法要: ${plan.household.name} ${targets}${plan.joint ? `〔${JOINT_SERVICE_LABEL}〕` : ""}`,
+    `■ 法要: ${householdLabel(plan.household, args)} ${targets}${plan.joint ? `〔${JOINT_SERVICE_LABEL}〕` : ""}`,
     `  日時: ${formatJst(plan.start)}〜${jstTimeString(plan.end)}（${plan.durationMin} 分）`,
     `  場所: ${LOCATION_LABELS[plan.location]}${plan.location !== "temple" && plan.household.address ? `（${areaOf(plan.household.address)}。番地は管理画面で確認）` : ""}`,
     `  法要の担当者: ${officiant}`,
-    `  施主: ${plan.seshu.display ?? "（未定）"}`,
-    `■ 担当者の予定: ${officiant}のカレンダーに「${plan.title}」（${rangeLabel(plan.hold)}、${holdNote}）を業務の予定として登録します`,
+    `  施主: ${seshuLabel({ relation: plan.seshu.relation, personId: plan.seshu.seshuPersonId, name: plan.seshu.seshuName }) ?? "（未定）"}`,
+    `■ 担当者の予定: ${officiant}のカレンダーに法要の予定（${rangeLabel(plan.hold)}、${holdNote}）を業務の予定として登録します`,
     plan.hall
       ? `■ ${plan.hall.name}の予約: ${rangeLabel(plan.hold)} を確定で押さえます（${holdNote}）`
       : "■ 本堂の予約: なし（自宅・墓前のため）",
     plan.request
-      ? `■ 申し込み: ${plan.request.source === "portal" ? "ポータル" : "電話"}で ${formatJst(plan.request.createdAt)} に受けた申し込み${plan.request.requestedByName ? `（${plan.request.requestedByName}さん）` : ""}を「確定」にして、この法要とひもづけます`
+      ? `■ 申し込み: ${plan.request.source === "portal" ? "ポータル" : "電話"}で ${formatJst(plan.request.createdAt)} に受けた申し込みを「確定」にして、この法要とひもづけます`
       : "■ 申し込み: 電話の受付として、申し込み（確定）を新しく記録します",
   ];
   if (plan.notes) lines.push(`■ メモ: ${plan.notes}`);
   if (plan.warnings.length > 0) lines.push(...plan.warnings.map((w) => `【注意】${w}`));
+  lines.push(`■ 家の名前、故人の名前と法号、施主の名前は管理画面で確認してください: ${adminUrl(`/admin/ledger/households/${plan.household.id}`)}`);
   return lines.join("\n");
 }
 
@@ -433,9 +442,9 @@ const bookMemorialServiceTool = defineWriteTool({
   preview: async (args, ctx) => {
     const plan = await planMemorialBooking(ctx.actor, await toBookingInput(args, ctx), undefined, { now: ctx.now });
     return {
-      summary: previewOf(plan),
+      summary: previewOf(plan, args),
       details: {
-        世帯: plan.household.name,
+        世帯: householdLabel(plan.household, args),
         故人: plan.targets.map(targetOut),
         複数霊位供養: plan.joint,
         日時: `${formatJst(plan.start)}〜${jstTimeString(plan.end)}`,
@@ -454,12 +463,12 @@ const bookMemorialServiceTool = defineWriteTool({
     return {
       法要: {
         memorial_service_id: r.serviceId,
-        内容: p.title,
-        故人: p.targets.map((t) => `${t.name} ${t.kaikiName}`),
+        内容: serviceLabel(p.targets, p.joint),
+        故人: p.targets.map((t) => `${personLabel(t)}の${t.kaikiName}`),
         日時: `${formatJst(p.start)}〜${jstTimeString(p.end)}`,
         場所: LOCATION_LABELS[p.location],
         法要の担当者: `${p.officiant.roleTitle} ${p.officiant.name}`,
-        施主: p.seshu.display,
+        施主: seshuLabel({ relation: p.seshu.relation, personId: p.seshu.seshuPersonId, name: p.seshu.seshuName }),
       },
       担当者の予定: { staff_event_id: r.staffEventId, 時間: rangeLabel(p.hold) },
       本堂の予約: r.reservation
@@ -489,23 +498,25 @@ const declineMemorialRequestTool = defineWriteTool({
     "法要の申し込みを、理由を添えて断る（状態は「お断り」になる）。理由は必須で、檀家ポータルに「お断り」と一緒に表示される。" +
     "呼ぶとプレビューが返るだけなので、住職の了承を得てから confirm_action を呼ぶ。",
   input: declineInput,
-  preview: async ({ memorial_request_id, reason }, { actor }) => {
+  preview: async (args, { actor }) => {
+    const { memorial_request_id, reason } = args;
     const r = await getMemorialRequest(actor, memorial_request_id);
+    const household = householdLabel({ name: r.householdName, address: r.householdAddress }, args);
     if (r.status !== "requested") throw invalid(`この申し込みは「${REQUEST_STATUS_LABELS[r.status]}」なので、お断りできません`);
     return {
       summary: [
         "次の申し込みをお断りします（まだ実行していません）。",
-        `世帯: ${r.householdName}`,
-        `故人: ${r.targets.map((t) => `${t.name} ${t.kaikiName}`).join("、")}`,
-        `受付: ${formatJst(r.createdAt)}（${REQUEST_SOURCE_LABELS[r.source]}${r.requestedByName ? `、${r.requestedByName}さん` : ""}）`,
+        `世帯: ${household}（管理画面: ${adminUrl(`/admin/memorial/requests/${r.id}`)}）`,
+        `故人: ${r.targets.map((t) => `${personLabel(t)}の${t.kaikiName}`).join("、")}`,
+        `受付: ${formatJst(r.createdAt)}（${REQUEST_SOURCE_LABELS[r.source]}）`,
         `理由（ポータルに表示されます）: ${reason}`,
       ].join("\n"),
-      details: { memorial_request_id: r.id, 世帯: r.householdName, 理由: reason },
+      details: { memorial_request_id: r.id, 世帯: household, 理由: reason },
     };
   },
   execute: async ({ memorial_request_id, reason }, { actor }) => {
     const r = await declineMemorialRequest(actor, memorial_request_id, reason);
-    return { memorial_request_id: r.id, 世帯: r.householdName, 状態: REQUEST_STATUS_LABELS[r.status], 理由: r.declineReason };
+    return { memorial_request_id: r.id, household_id: r.householdId, 状態: REQUEST_STATUS_LABELS[r.status], 理由: r.declineReason };
   },
 });
 

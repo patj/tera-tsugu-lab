@@ -66,7 +66,7 @@
 - [x] 故人の一覧（過去帳）と、年忌を迎える故人の一覧（期間を指定する）
 - [x] 対応記録の追加
 - [x] 用語は宗派プリセットから取る（「法号」など）
-- [ ] 年忌を迎える故人の一覧（`/admin/ledger/memorials`）を、回忌（`?kaiki=3`）でも絞れるようにする（MCP の `list_upcoming_memorials` が URL を返すため）
+- [x] 年忌を迎える故人の一覧（`/admin/ledger/memorials`）を、回忌（`?kaiki=3`）でも絞れるようにする（MCP の `list_upcoming_memorials` が URL を返すため）
 - [ ] 【後にしてよい】世帯にお墓の場所（住所。境内の墓地なら空）を足す。スキーマ、世帯の編集と詳細の画面、シード（墓前の法要に使う世帯に入れる）（spec.md §2）
 
 ### MCP（`src/mcp/tools/ledger.ts`）
@@ -75,7 +75,7 @@
 - [x] `search_deceased`（読み取り）
 - [x] `list_upcoming_memorials`（読み取り）。回忌ごとにまとめて返す
 - [x] `add_contact_log`（書き込み。プレビュー → `confirm_action`）
-- [ ] 名前を LLM に返さない（spec.md §4「LLM に渡す情報」、11/6 の決定）
+- [x] 名前を LLM に返さない（spec.md §4「LLM に渡す情報」、11/6 の決定）
   - `search_households`: 検索語と家の名前が合う家だけ、家の名前と町名を返す。町名・電話番号・家族の名前で当たった家は、件数と URL だけ。世帯主と窓口の名前は返さない
   - `get_household`: 家の名前、家族と故人の名前、法号を返さない。家族は続柄と世帯主・窓口の印、故人は続柄・没年・次の年忌
   - `search_deceased`: 候補を町名・続柄・没年・次の年忌で返す。家の名前は検索語と合うときだけ

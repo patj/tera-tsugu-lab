@@ -61,3 +61,11 @@ export function systemActor(templeId: string): Actor {
 export function isStaff(actor: Actor): actor is Actor & { staffId: string } {
   return typeof actor.staffId === "string";
 }
+
+/**
+ * MCP の操作者か。MCP の結果やエラーの文は LLM の事業者に送られるので、檀家の名前（故人の俗名と法号、家族の名前）を文に入れない。
+ * 人は続柄と没年で表す（spec.md §4「LLM に渡す情報」）
+ */
+export function hidesNames(actor: Actor): boolean {
+  return actor.channel === "mcp";
+}

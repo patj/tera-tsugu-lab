@@ -93,7 +93,9 @@ describe("施設予約の MCP ツール", () => {
     const tea = list.予約.find((r) => r.申請番号 === codes.tea)!;
     assert.equal(photo.施設, "本堂");
     assert.equal(photo.日時, "2026-12-06（日）09:00〜12:00");
-    assert.equal(photo.申請者, "青木 美咲");
+    // 申請者の名前は最初の 1 文字だけを残して伏せる
+    assert.equal(photo.申請者, "青○ ○○ 様");
+    assert.ok(!JSON.stringify(list).includes("青木 美咲"));
     // 申請者の連絡先は LLM に返さない（管理画面の URL を添える）
     assert.equal(photo.電話, undefined);
     assert.ok(!JSON.stringify(list).includes("090-1234-5678"), "申請者の電話番号を返さない");
@@ -147,7 +149,8 @@ describe("施設予約の MCP ツール", () => {
     });
     const list = data<{ 予約: Item[] }>(await rt.call("list_reservations", { status: "pending", facility: "東席" }, ctx));
     const item = list.予約.find((r) => r.申請番号 === tea)!;
-    assert.deepEqual(item.重なりの確認!.法要, ["本堂 2026-12-13（日）13:50〜14:50 法要（確定） テスト家 法要"]);
+    // 件名（家の名前が入りうる）は返さない
+    assert.deepEqual(item.重なりの確認!.法要, ["本堂 2026-12-13（日）13:50〜14:50 法要（確定）"]);
   });
 
   it("申請中でない予約は承認もお断りもできない。知らない申請番号はエラー", async () => {
@@ -175,7 +178,7 @@ describe("施設予約の MCP ツール", () => {
     assert.match(data<{ preview: string }>(r).preview, /中席[\s\S]*2026-12-26（土）13:00〜16:00[\s\S]*佐藤 一郎/);
     const done = await confirm(r);
     assert.equal(done.result.状態, "確定");
-    assert.equal(done.result.申請者, "佐藤 一郎");
+    assert.equal(done.result.申請者, "佐○ ○○ 様");
     assert.match(done.result.申請番号, /^[A-Z2-9]{4}-[A-Z2-9]{4}$/);
 
     assert.match(
@@ -210,6 +213,7 @@ describe("施設予約の MCP ツール", () => {
     assert.equal(hondo.日付, "2026-12-06（日）");
     assert.equal(hondo.午前, "◯");
     assert.equal(hondo.午後, "×");
-    assert.deepEqual(hondo.予約, ["2026-12-06（日）14:00〜16:00 前撮り撮影（確定） 石川様 前撮り"]);
+    // 件名（「石川様 前撮り」）は返さず、目的と状態だけ
+    assert.deepEqual(hondo.予約, ["2026-12-06（日）14:00〜16:00 前撮り撮影（確定）"]);
   });
 });

@@ -1,6 +1,8 @@
-// 年忌を迎える故人の一覧（期間を指定する。初期値は来月）
+// 年忌を迎える故人の一覧（期間と回忌を指定する。期間の初期値は来月）
+// MCP の list_upcoming_memorials は名前を返さず、この画面の URL（?from=&to=&kaiki=）を添える（spec.md §4「LLM に渡す情報」）
 import Link from "next/link";
 import { getTemple, isDomainError, jstParts } from "@/domain/core";
+import { kaikiName } from "@/domain/ledger";
 import { listUpcomingMemorials, type UpcomingMemorials } from "@/domain/ledger";
 import { getStaffActor } from "@/lib/staff-auth";
 import { inputClass, linkClass, Notice, param, subButtonClass } from "../ui";
@@ -23,11 +25,13 @@ export default async function MemorialsPage({ searchParams }: PageProps<"/admin/
   const to = param(sp.to) || def.to;
   const actor = await getStaffActor();
   const preset = (await getTemple(actor.templeId)).preset;
+  const kaikiParam = Number(param(sp.kaiki));
+  const kaiki = preset.kaikiList.includes(kaikiParam) ? kaikiParam : null;
 
   let result: UpcomingMemorials | null = null;
   let error: string | undefined;
   try {
-    result = await listUpcomingMemorials(actor, { from, to });
+    result = await listUpcomingMemorials(actor, { from, to, kaiki });
   } catch (e) {
     if (!isDomainError(e)) throw e;
     error = e.message;
@@ -48,6 +52,17 @@ export default async function MemorialsPage({ searchParams }: PageProps<"/admin/
           <span className="block font-medium">終わり</span>
           <input type="date" name="to" defaultValue={to} className={inputClass} />
         </label>
+        <label>
+          <span className="block font-medium">回忌</span>
+          <select name="kaiki" defaultValue={kaiki ?? ""} className={inputClass}>
+            <option value="">すべて</option>
+            {preset.kaikiList.map((k) => (
+              <option key={k} value={k}>
+                {kaikiName(k, preset)}
+              </option>
+            ))}
+          </select>
+        </label>
         <button type="submit" className={subButtonClass}>
           表示
         </button>
@@ -63,7 +78,7 @@ export default async function MemorialsPage({ searchParams }: PageProps<"/admin/
       {result && (
         <>
           <p className="mt-2 text-stone-600">
-            {result.from}〜{result.to}: {result.total} 人
+            {result.from}〜{result.to}{kaiki && `（${kaikiName(kaiki, preset)}）`}: {result.total} 人
           </p>
           {result.groups.map((g) => (
             <section key={g.kaiki} className="mt-6">

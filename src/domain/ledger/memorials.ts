@@ -54,7 +54,7 @@ const MAX_RANGE_YEARS = 3;
 /** 期間（"YYYY-MM-DD"、両端を含む）に祥月命日が来て、年忌を迎える故人を、回忌ごとにまとめて返す */
 export async function listUpcomingMemorials(
   actor: Actor,
-  range: { from: string; to: string },
+  range: { from: string; to: string; /** 回忌で絞る（一周忌は 2） */ kaiki?: number | null },
   conn: DbOrTx = db,
 ): Promise<UpcomingMemorials> {
   assertStaff(actor);
@@ -99,6 +99,7 @@ export async function listUpcomingMemorials(
     for (let year = fromYear; year <= toYear; year++) {
       const m = memorialInYear(p.deathDate!, year, preset);
       if (!m || m.meinichi < range.from || m.meinichi > range.to) continue;
+      if (range.kaiki && m.kaiki !== range.kaiki) continue;
       const sameYear = rows
         .filter((o) => o.p.householdId === p.householdId && o.p.id !== p.id)
         .flatMap((o) => {

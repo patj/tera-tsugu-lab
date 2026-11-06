@@ -63,14 +63,21 @@ describe("台本の場面 0（MCP）: 山田さんのお父さんの七回忌を
     assert.equal(v1.status, "要確認");
     const cands = v1["候補"] as Obj[];
     assert.equal(cands.length, 2);
-    const taro = cands.find((c) => c["俗名"] === "山田 太郎")!;
-    const taichi = cands.find((c) => c["俗名"] === "山田 太一")!;
-    assert.equal(taro["法号"], "慈光院日太信士");
+    // 俗名と法号は返さず、町名・続柄・没年で見分ける。家の名前は検索語（山田）と合うので返る
+    const taro = cands.find((c) => c.person_id === seed.get("person:yamada:father"))!;
+    const taichi = cands.find((c) => c.person_id === seed.get("person:yamada_kita:father"))!;
+    assert.equal(taro["俗名"], undefined);
+    assert.equal(taro["法号"], undefined);
+    assert.equal(taro["続柄"], "父");
+    assert.equal((taro["世帯"] as Obj)["呼び方"], "武蔵野市本町の山田家");
+    assert.equal((taichi["世帯"] as Obj)["呼び方"], "武蔵野市北町の山田家");
     assert.equal(taro["没年"], 2021);
     assert.equal(taro["希望の年の回忌"], "2027 年は七回忌");
-    assert.equal(taichi["法号"], "慈雲院日一信士");
+    assert.equal(taichi["没年"], 2018);
     assert.equal(taichi["希望の年の回忌"], "2027 年は十回忌（年忌ではない）");
     assert.match(v1["次にすること"] as string, /住職に伝え/);
+    assert.match(v1["メッセージ"] as string, /町名・続柄・没年/);
+    for (const n of ["山田 太郎", "山田 太一", "慈光院", "慈雲院"]) assert.ok(!JSON.stringify(v1).includes(n), n);
 
     // 2. 住職「本町の山田さん」→ person_id で呼び直す: 七回忌、祥月命日 3/24、キヨさんの十三回忌（複数霊位供養の提案）
     const v2 = data(
@@ -87,11 +94,15 @@ describe("台本の場面 0（MCP）: 山田さんのお父さんの七回忌を
     assert.equal(checks["2_回忌と年"]["結果"], "OK");
     assert.match(checks["3_祥月命日"]["内容"] as string, /3\/24/);
     assert.equal(checks["4_複数霊位供養"]["結果"], "提案あり");
-    assert.match(checks["4_複数霊位供養"]["内容"] as string, /山田 キヨ.*十三回忌.*複数霊位供養/);
+    assert.match(checks["4_複数霊位供養"]["内容"] as string, /祖母（2015 年没）の十三回忌.*複数霊位供養/);
+    assert.match(checks["1_故人の確認"] as unknown as string, /父（2021 年没）として確認します/);
     const joint = v2["複数霊位供養の候補"] as Obj[];
     assert.equal(joint.length, 1);
     const kiyo = joint[0];
-    assert.equal(kiyo["俗名"], "山田 キヨ");
+    assert.equal(kiyo.person_id, seed.get("person:yamada:grandmother"));
+    assert.equal(kiyo["続柄"], "祖母");
+    assert.equal(kiyo["没年"], 2015);
+    for (const n of ["山田 太郎", "山田 キヨ", "慈光院", "妙香院", "山田家"]) assert.ok(!JSON.stringify(v2).includes(n), n);
     assert.equal(kiyo["回忌"], 13);
     const householdId = (v2["故人"] as Obj)["世帯"] as Obj;
     assert.equal(householdId.household_id, seed.get("household:yamada"));
@@ -122,7 +133,7 @@ describe("台本の場面 0（MCP）: 山田さんのお父さんの七回忌を
     const idxAfter = days.findIndex((d) => d["祥月命日より前"] === false);
     assert.ok(idxAfter > days.indexOf(d15));
     assert.ok((slots["条件"] as Obj)["押さえ方"]);
-    assert.deepEqual(slots["祥月命日"], ["山田 太郎: 2027-03-24（水）", "山田 キヨ: 2027-08-10（火）"]);
+    assert.deepEqual(slots["祥月命日"], ["父（2021 年没）: 2027-03-24（水）", "祖母（2015 年没）: 2027-08-10（火）"]);
 
     // 4. 住職「3/15 の 10 時、住職の担当で。キヨさんもあわせて」→ プレビュー（まだ登録しない）
     const bookArgs = {
@@ -140,7 +151,9 @@ describe("台本の場面 0（MCP）: 山田さんのお父さんの七回忌を
     const p = data(await runtime.call("book_memorial_service", bookArgs, ctx));
     assert.equal(p.status, "needs_confirmation");
     const preview = p.preview as string;
-    assert.match(preview, /山田家/);
+    // ID で呼ぶので家の名前は入らない。町名と続柄で示す
+    assert.match(preview, /武蔵野市本町の世帯 父（2021 年没）の七回忌、祖母（2015 年没）の十三回忌/);
+    assert.ok(!/山田家|山田 太郎|山田 健|慈光院/.test(preview));
     assert.match(preview, /七回忌/);
     assert.match(preview, /十三回忌/);
     assert.match(preview, /複数霊位供養/);
@@ -149,7 +162,7 @@ describe("台本の場面 0（MCP）: 山田さんのお父さんの七回忌を
     assert.match(preview, /担当者の予定:.*09:50〜10:50/);
     assert.match(preview, /本堂の予約: 2027-03-15（月）09:50〜10:50 を確定で押さえます/);
     assert.match(preview, /電話の受付として、申し込み（確定）を新しく記録します/);
-    assert.match(preview, /施主: 山田 健/);
+    assert.match(preview, /施主: 世帯主（本人）/);
     assert.doesNotMatch(preview, /導師|戒名/);
     assert.equal((await db.select().from(memorialServices)).length, before);
 
@@ -220,7 +233,7 @@ describe("台本の場面 0（MCP）: 山田さんのお父さんの七回忌を
     const warn = data(
       await runtime.call("book_memorial_service", { ...args, location: "temple", targets: [{ person_id: seed.get("person:yamada:father"), kaiki: 3 }] }, ctx),
     );
-    assert.match(warn.preview as string, /【注意】山田 太郎さんの三回忌は 2023 年/);
+    assert.match(warn.preview as string, /【注意】父（2021 年没）の三回忌は 2023 年/);
   });
 });
 
@@ -254,13 +267,15 @@ describe("台本の場面 5 の後半（MCP）: 新しい法要の申し込み�
     assert.ok(reqs.length >= 2);
     for (const r of reqs) assert.equal(r["状態"], "受付済み");
     const mine = reqs.find((r) => r.memorial_request_id === id)!;
-    assert.equal((mine["世帯"] as Obj)["名前"], "田中家");
+    // 家の名前、申し込んだ人と故人の名前は返さない（続柄で示す）
+    assert.equal(mine["household_id"], tanaka);
     assert.equal(mine["経路"], "ポータル");
-    assert.equal(mine["申し込んだ人"], "田中 健一");
+    assert.equal(mine["申し込んだ人"], "長男");
     assert.deepEqual(
-      (mine["故人"] as Obj[]).map((t) => `${t["俗名"]} ${t["呼び名"]}`),
-      ["田中 和子 三回忌"],
+      (mine["故人"] as Obj[]).map((t) => `${t["続柄"]} ${t["呼び名"]}`),
+      ["妻 三回忌"],
     );
+    for (const n of ["田中家", "田中 健一", "田中 和子", "蓮華院"]) assert.ok(!JSON.stringify(list).includes(n), n);
     assert.equal(mine["参列の人数"], 8);
     assert.equal(mine["お斎"], "あり");
     assert.match((mine["希望の時期"] as string[])[0], /第 1 希望: 2027-04-03（土）〜2027-04-11（日）（土日を希望）/);
@@ -270,14 +285,15 @@ describe("台本の場面 5 の後半（MCP）: 新しい法要の申し込み�
     const days = slots["候補"] as Day[];
     assert.equal(days[0]["日付"], "2027-04-03（土）");
     assert.equal(days[0]["祥月命日より前"], true);
-    assert.deepEqual(slots["祥月命日"], ["田中 和子: 2027-04-12（月）"]);
+    assert.deepEqual(slots["祥月命日"], ["妻（2025 年没）: 2027-04-12（月）"]);
 
     // 3. 住職「4/3 の 11 時、副住職で」→ プレビュー → 了承
     const p = data(
       await runtime.call("book_memorial_service", { memorial_request_id: id, date: "2027-04-03", time: "11:00", officiant: "副住職" }, ctx),
     );
-    assert.match(p.preview as string, /ポータルで .* に受けた申し込み（田中 健一さん）を「確定」にして/);
-    assert.match(p.preview as string, /田中家/);
+    assert.match(p.preview as string, /ポータルで .* に受けた申し込みを「確定」にして/);
+    assert.match(p.preview as string, /武蔵野市栄町の世帯 妻（2025 年没）の三回忌/);
+    assert.ok(!/田中家|田中 健一|田中 和子/.test(p.preview as string));
     assert.match(p.preview as string, /本堂の予約: 2027-04-03（土）10:50〜11:50/);
     const done = data(await runtime.call("confirm_action", { confirmation_id: p.confirmation_id }, ctx));
     assert.equal(((done.result as Obj)["申し込み"] as Obj).memorial_request_id, id);
@@ -298,13 +314,14 @@ describe("台本の場面 5 の後半（MCP）: 新しい法要の申し込み�
 
   it("申し込みを理由を添えて断る（decline_memorial_request）。理由がなければエラー", async () => {
     const list = data(await runtime.call("list_memorial_requests", {}, ctx));
-    const target = (list["申し込み"] as Obj[]).find((r) => (r["世帯"] as Obj)["名前"] === "井上家")!;
+    const target = (list["申し込み"] as Obj[]).find((r) => r["household_id"] === seed.get("household:inoue"))!;
     const rid = target.memorial_request_id as string;
     assert.match(error(await runtime.call("decline_memorial_request", { memorial_request_id: rid, reason: "" }, ctx)), /引数/);
     const p = data(
       await runtime.call("decline_memorial_request", { memorial_request_id: rid, reason: "その時期は本山の行事で、お伺いできません" }, ctx),
     );
-    assert.match(p.preview as string, /井上家/);
+    assert.match(p.preview as string, /世帯: .*の世帯（管理画面: /);
+    assert.ok(!(p.preview as string).includes("井上家"));
     assert.match(p.preview as string, /ポータルに表示されます/);
     data(await runtime.call("confirm_action", { confirmation_id: p.confirmation_id }, ctx));
     const [row] = await db.select().from(memorialRequests).where(eq(memorialRequests.id, rid));

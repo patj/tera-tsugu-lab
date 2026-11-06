@@ -3,7 +3,7 @@
 import { and, asc, desc, eq, inArray, sql, type SQL } from "drizzle-orm";
 import { db, type DbOrTx } from "@/db/client";
 import { memorialRequests, memorialServices, type PreferredPeriod } from "@/db/schema";
-import { addDays, conflict, forbidden, getTemple, invalid, notFound, todayJst, writeAuditLog, type Actor } from "@/domain/core";
+import { addDays, conflict, forbidden, getTemple, hidesNames, invalid, notFound, todayJst, writeAuditLog, type Actor } from "@/domain/core";
 import {
   assertStaff,
   checkDate,
@@ -89,16 +89,16 @@ export async function resolveSeshu(
   input: { seshuPersonId?: string | null; seshuName?: string | null },
   fallbackPersonId: string | null,
   conn: DbOrTx = db,
-): Promise<{ seshuPersonId: string | null; seshuName: string | null; display: string | null }> {
+): Promise<{ seshuPersonId: string | null; seshuName: string | null; display: string | null; relation: string | null }> {
   const name = optText(input.seshuName, "施主の名前", 60);
   const personId = input.seshuPersonId?.trim() || null;
   if (personId && name) throw invalid("施主は、家族から選ぶか名前を入力するかの、どちらか 1 つにしてください");
-  if (name) return { seshuPersonId: null, seshuName: name, display: name };
+  if (name) return { seshuPersonId: null, seshuName: name, display: name, relation: null };
   const id = personId ?? fallbackPersonId;
-  if (!id) return { seshuPersonId: null, seshuName: null, display: null };
+  if (!id) return { seshuPersonId: null, seshuName: null, display: null, relation: null };
   const p = await requirePerson(templeId, id, conn);
   if (p.householdId !== householdId || p.isDeceased) throw invalid("施主は、この世帯の生きている家族から選んでください");
-  return { seshuPersonId: p.id, seshuName: null, display: fullName(p) };
+  return { seshuPersonId: p.id, seshuName: null, display: fullName(p), relation: p.relation };
 }
 
 /**
@@ -158,6 +158,8 @@ export type MemorialRequestView = {
   /** ポータルから申し込んだ人（代理の家族を含む） */
   requestedByPersonId: string | null;
   requestedByName: string | null;
+  /** 申し込んだ人の続柄（MCP では名前の代わりに使う） */
+  requestedByRelation: string | null;
   /** 電話で受けたスタッフ */
   staffId: string | null;
   staffName: string | null;
@@ -165,6 +167,8 @@ export type MemorialRequestView = {
   seshuName: string | null;
   /** 施主の表示名（台帳の人ならその氏名） */
   seshuDisplay: string | null;
+  /** 施主の続柄（台帳にいる人のとき。MCP では名前の代わりに使う） */
+  seshuRelation: string | null;
   targets: TargetView[];
   preferredPeriods: PreferredPeriod[];
   location: MemorialLocation;
@@ -187,7 +191,8 @@ export type MemorialRequestView = {
 
 type RequestRow = typeof memorialRequests.$inferSelect;
 
-async function toViews(rows: RequestRow[], conn: DbOrTx): Promise<MemorialRequestView[]> {
+/** hide: MCP の操作者のとき true（注意の文に名前を入れない） */
+async function toViews(rows: RequestRow[], conn: DbOrTx, hide = false): Promise<MemorialRequestView[]> {
   if (rows.length === 0) return [];
   const personIds = rows.flatMap((r) => [
     ...r.targets.map((t) => t.personId),
@@ -228,11 +233,13 @@ async function toViews(rows: RequestRow[], conn: DbOrTx): Promise<MemorialReques
       createdAt: r.createdAt,
       requestedByPersonId: r.requestedByPersonId,
       requestedByName: by ? fullName(by) : null,
+      requestedByRelation: by?.relation ?? null,
       staffId: r.staffId,
       staffName: r.staffId ? staffLabel(staffMap.get(r.staffId)) : null,
       seshuPersonId: r.seshuPersonId,
       seshuName: r.seshuName,
       seshuDisplay: seshuP ? fullName(seshuP) : r.seshuName,
+      seshuRelation: seshuP?.relation ?? null,
       targets,
       preferredPeriods: r.preferredPeriods ?? [],
       location: r.location as MemorialLocation,
@@ -240,7 +247,7 @@ async function toViews(rows: RequestRow[], conn: DbOrTx): Promise<MemorialReques
       otoki: r.otoki,
       notes: r.notes,
       declineReason: r.declineReason,
-      warnings: r.status === "requested" && firstDate ? bookingWarnings(targets, firstDate, preset) : [],
+      warnings: r.status === "requested" && firstDate ? bookingWarnings(targets, firstDate, preset, hide) : [],
       service:
         s && s.status !== "cancelled"
           ? {
@@ -333,7 +340,7 @@ export async function listMemorialRequests(
       desc(memorialRequests.createdAt),
     )
     .limit(opts.limit ?? 200);
-  return toViews(rows, conn);
+  return toViews(rows, conn, hidesNames(actor));
 }
 
 /** 申し込みを 1 件取る（スタッフ用）。なければ notFound */
@@ -345,7 +352,7 @@ export async function getMemorialRequest(actor: Actor, id: string, conn: DbOrTx 
     .from(memorialRequests)
     .where(and(eq(memorialRequests.id, id), eq(memorialRequests.templeId, actor.templeId)));
   if (!row) throw notFound("申し込みが見つかりません");
-  return (await toViews([row], conn))[0];
+  return (await toViews([row], conn, hidesNames(actor)))[0];
 }
 
 /** 申し込みの行をロックして取る（確定・お断りが同時に起きないように） */

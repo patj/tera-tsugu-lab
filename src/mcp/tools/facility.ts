@@ -1,5 +1,6 @@
 // 施設予約（facility）の MCP ツール（spec.md §4、§6）。取り消しは MCP では行わない（管理画面からだけ）
-// LLM には申請者の連絡先（電話、メール）と、予約の内容（申請者が書いた自由記述）を返さない。管理画面の URL を添える
+// LLM には申請者の連絡先（電話、メール）、予約の件名と内容（自由記述）を返さない。申請者の名前は最初の 1 文字だけを残して伏せ、
+// 檀家（世帯）の予約は名前を返さない。管理画面の URL を添える（spec.md §4「LLM に渡す情報」）
 import { z } from "zod";
 import { db } from "@/db/client";
 import {
@@ -36,7 +37,14 @@ import {
   type ReservationWithParty,
 } from "@/domain/facility";
 import { defineReadTool, defineWriteTool, type ToolDef } from "../framework/define";
-import { adminUrl, SEE_ADMIN } from "../framework/present";
+import { adminUrl, maskName, SEE_ADMIN } from "../framework/present";
+
+/** 申請者の表し方: 一般の方は名前の一部を伏せる。檀家（世帯）の予約は名前を返さない */
+function partyOf(r: ReservationWithParty): string | undefined {
+  if (r.contactId) return maskName(r.partyName) ?? undefined;
+  if (r.householdId) return "檀家（管理画面で確認）";
+  return undefined;
+}
 
 const WEEKDAYS = ["日", "月", "火", "水", "木", "金", "土"];
 const MAX_DAYS = 62;
@@ -62,8 +70,8 @@ function present(r: ReservationWithParty) {
     種類: kindLabel(r.kind),
     状態: statusLabel(r.status),
     日時: formatRange(r.start, r.end),
-    申請者: r.partyName ?? undefined,
-    件名: r.title ?? undefined,
+    申請者: partyOf(r),
+    件名: r.title?.trim() ? SEE_ADMIN : undefined,
     内容: r.notes?.trim() ? SEE_ADMIN : undefined,
     お断りの理由: r.rejectReason ?? undefined,
     管理画面: adminUrl(`/admin/facility/${r.id}`),
@@ -71,7 +79,7 @@ function present(r: ReservationWithParty) {
 }
 
 function brief(r: Reservation) {
-  return `${r.facilityName} ${formatRange(r.start, r.end)} ${kindLabel(r.kind)}（${statusLabel(r.status)}）${r.title ? ` ${r.title}` : ""}`;
+  return `${r.facilityName} ${formatRange(r.start, r.end)} ${kindLabel(r.kind)}（${statusLabel(r.status)}）`;
 }
 
 /** 承認待ちの予約が、法要やほかの予約と重ならないかの確認結果 */
@@ -122,7 +130,7 @@ const checkFacilityAvailability = defineReadTool({
             午前: d.available.am ? "◯" : "×",
             午後: d.available.pm ? "◯" : "×",
             ...(day.length > 0
-              ? { 予約: day.map((r) => `${formatRange(r.start, r.end)} ${kindLabel(r.kind)}（${statusLabel(r.status)}）${r.title ? ` ${r.title}` : ""}`) }
+              ? { 予約: day.map((r) => `${formatRange(r.start, r.end)} ${kindLabel(r.kind)}（${statusLabel(r.status)}）`) }
               : {}),
           };
         }),
@@ -139,7 +147,8 @@ const listReservationsTool = defineReadTool({
     "施設の予約の一覧を返す。承認待ち（申請中）が先頭。「承認待ちの予約はある？」には status = pending で呼ぶ。" +
     "承認待ちの予約には、同じ時間に入っている法要やほかの施設の予約（重なりの確認）もあわせて返すので、承認の前に「法要と重ならないこと」を住職に伝える。" +
     "期間を省くと今日以降。予約を承認するときは approve_reservation、断るときは reject_reservation に申請番号を渡す。" +
-    "申請者の電話・メールと、予約の内容（申請者が書いた文）は返さない（内容があれば「あり」と返すので、住職に「管理画面」の URL で確かめてもらう）。",
+    "申請者の電話・メール、予約の件名と内容は返さない（あれば「あり」と返すので、住職に「管理画面」の URL で確かめてもらう）。" +
+    "申請者の名前は最初の 1 文字だけを残して伏せる（「佐○ ○○ 様」）。檀家の予約は名前を返さない。",
   input: {
     status: z
       .enum(STATUS_FILTER)
@@ -269,7 +278,7 @@ const approveReservationTool = defineWriteTool({
       `- 施設: ${r.facilityName}`,
       `- 日時: ${formatRange(r.start, r.end)}`,
       `- 種類: ${kindLabel(r.kind)}`,
-      w.partyName && `- 申請者: ${w.partyName}`,
+      partyOf(w) && `- 申請者: ${partyOf(w)}`,
       r.notes?.trim() && `- 内容: ${SEE_ADMIN}（${adminUrl(`/admin/facility/${r.id}`)}）`,
       `- 重なりの確認: ${check.同じ施設}。${typeof check.法要 === "string" ? check.法要 : `同じ時間の法要: ${check.法要.join("、")}`}`,
     ].filter(Boolean);
@@ -301,7 +310,7 @@ const rejectReservationTool = defineWriteTool({
       `- 施設: ${r.facilityName}`,
       `- 日時: ${formatRange(r.start, r.end)}`,
       `- 種類: ${kindLabel(r.kind)}`,
-      w.partyName && `- 申請者: ${w.partyName}`,
+      partyOf(w) && `- 申請者: ${partyOf(w)}`,
       `- 理由: ${reason}`,
     ].filter(Boolean);
     return { summary: lines.join("\n") };
