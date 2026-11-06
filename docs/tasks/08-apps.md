@@ -89,7 +89,7 @@
 
 - AI の返事の形は、SDK の `zodOutputFormat` を使わず、`z.toJSONSchema` から作る（`zodOutputFormat` は enum まで説明に移すため。SDK 1.6.0 で確かめた）。長さや範囲は説明に移し、基盤が zod で確かめる
 - Opus 5.5 / Sonnet 5.5 は server-side fallback（`fallbacks: "default"`、`server-side-fallback-2026-07-01`）を付ける。Haiku 5.5 は付けない。thinking と temperature は送らず、effort を必ず送る（初期値 low）
-- 本物の Claude API はまだ呼んでいない（この PC にキーがないため）。リクエストの形は、偽の API で確かめた
+- 本物の Claude API で 1 回確かめた（11/6、運用者の承認を得て。`dist/real-api-check.ts`）: Sonnet 5.5 に、構造化出力（enum を含む）、effort: low、`fallbacks: "default"` とその beta ヘッダー、画像（PNG）、SDK の認証の形で送り、成功した（入力 604 / 出力 61 トークン、約 $0.0018）。返事は zod の確かめも通った。Opus 5.5 と Haiku 5.5、キットの試す画面からの本物の呼び出しは、まだ確かめていない
 - キットの AI の中継は `preview/ai-middleware.ts` を Vite の `ssrLoadModule` で読み込む（`vite.config.mts` から sdk/ を直接 import すると、Vite の設定の読み込み方の注意が出るため）
 
 ## 残っていること
