@@ -253,7 +253,7 @@ describe("MCP のツールは、返さないと決めた情報を LLM に返さ�
     const pending = (all["予約"] as Obj[]).filter((r) => r["状態"] === "申請中");
     assert.ok(pending.length > 0);
     for (const r of pending) {
-      assertNoSecrets("approve_reservation のプレビュー", data(await runtime.call("approve_reservation", { request_code: r["申請番号"] }, ctx)));
+      assertNoSecrets("approve_reservation のプレビュー", await call("approve_reservation", { request_code: r["申請番号"] }));
       assertNoSecrets(
         "reject_reservation のプレビュー",
         await call("reject_reservation", { request_code: r["申請番号"], reason: "あいにくその日は行事があります" }),
@@ -285,5 +285,64 @@ describe("MCP のツールは、返さないと決めた情報を LLM に返さ�
     const msg = (r as { error: string }).error;
     assertNoSecrets("book_memorial_service のエラー", msg);
     assert.match(msg, /父（2020 年没）の七回忌は、すでに/);
+  });
+  it("書き込みの結果（confirm_action）にも、名前・件名・引数にない家の名前を入れない", async () => {
+    const confirm = async (label: string, preview: Obj) => {
+      assert.equal(preview.status, "needs_confirmation", label);
+      const done = await call("confirm_action", { confirmation_id: preview.confirmation_id });
+      assertNoSecrets(`${label} の結果`, done);
+      return done;
+    };
+    await confirm(
+      "add_contact_log",
+      await call("add_contact_log", { household_id: seed.get("household:tanaka"), kind: "電話", body: "法要の日程の相談を受けた" }),
+    );
+
+    const father = seed.get("person:yamada:father");
+    const slots = await call("find_memorial_slots", { from: "2027-03-01", to: "2027-03-20", person_ids: [father], location: "temple" });
+    const day = (slots["候補"] as Obj[])[0];
+    const slot = (day["時刻"] as Obj[])[0];
+    await confirm(
+      "book_memorial_service",
+      await call("book_memorial_service", {
+        household_id: seed.get("household:yamada"),
+        targets: [{ person_id: father, kaiki: 7 }],
+        date: (day["日付"] as string).slice(0, 10),
+        time: slot["開始"],
+        officiant: (slot["担当できる人"] as string[])[0].split(" ")[0],
+        location: "temple",
+      }),
+    );
+
+    const requests = (await call("list_memorial_requests", {}))["申し込み"] as Obj[];
+    assert.ok(requests.length > 0);
+    await confirm(
+      "decline_memorial_request",
+      await call("decline_memorial_request", { memorial_request_id: requests[0]["memorial_request_id"], reason: "その時期はお伺いできません" }),
+    );
+
+    const pending = ((await call("list_reservations", { status: "pending", from: "2026-01-01" }))["予約"] as Obj[]).map(
+      (r) => r["申請番号"],
+    );
+    assert.ok(pending.length >= 2);
+    await confirm("approve_reservation", await call("approve_reservation", { request_code: pending[0] }));
+    await confirm("reject_reservation", await call("reject_reservation", { request_code: pending[1], reason: "あいにく行事があります" }));
+
+    // create_reservation: プレビューは住職が渡した件名と名前をそのまま見せるが、登録の結果は伏せる
+    const created = await confirm(
+      "create_reservation",
+      await call("create_reservation", {
+        facility: "西席",
+        kind: "other",
+        start: "2027-02-20 10:00",
+        end: "12:00",
+        title: "試験の件名",
+        contact_name: "試験 花子",
+        contact_phone: "000-0000-0000",
+      }),
+    );
+    const json = JSON.stringify(created);
+    assert.ok(!json.includes("試験 花子") && !json.includes("試験の件名"), json);
+    assert.match(json, /試○ ○○ 様/);
   });
 });
