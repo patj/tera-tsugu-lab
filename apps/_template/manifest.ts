@@ -8,6 +8,7 @@ export const manifest = defineAppManifest({
   description: "アプリの一覧に出す、1〜2 文の説明。",
   icon: "📝",
   // true にすると、利用者が「お寺と共有する」を選べるようになる（Admin.tsx が必要）
+  // "perDoc" にすると、共有したうえで、利用者が 1 件ずつ選んだ文書だけを見せる（apps/CLAUDE.md の「1 件ずつの共有」）。false は共有しない
   sharing: true,
   // 必要なときだけ書く:
   // display: "fullscreen",   // アプリが画面全体を使う（右上の 48px 四方はあけておく）

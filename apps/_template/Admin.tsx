@@ -1,4 +1,4 @@
-// スタッフの画面（sharing: true のときだけ使う）。共有されている文書を props で受け取り、表示するだけ（読むだけ）
+// スタッフの画面（sharing が true か "perDoc" のときだけ使う）。共有されている文書を props で受け取り、表示するだけ（読むだけ。"perDoc" では、利用者が選んだ文書だけが届く）
 import type { AppAdminProps } from "@/apps-sdk";
 import type { Note } from "./types";
 

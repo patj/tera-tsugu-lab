@@ -1,11 +1,11 @@
 // 試す画面（npm run dev）。apps/ の中のアプリを、本体に近い見た目で試す。
 // - 利用者の画面: 本体の帯（または全画面の右上のボタン）と、アプリの App.tsx
-// - スタッフの画面: 共有されているときに、本体の管理画面で見える Admin.tsx
+// - スタッフの画面: 共有されているときに、本体の管理画面で見える Admin.tsx（sharing: "perDoc" では、印の付いた文書だけ）
 // データはブラウザの中にだけ保存する（試すためだけ）。AI は試す画面のサーバーが Claude を呼ぶ。このファイルは変えなくてよい
 import { useEffect, useState, type ComponentType, type ReactNode } from "react";
 import { useAppAIConsentControl } from "../sdk/ai-client";
 import { PreviewStorageProvider, clearPreviewData, loadPreviewData, useAppSharing } from "../sdk/storage";
-import type { AppAdminProps, AppManifest, AppProps } from "../sdk/types";
+import { appSharesPerDoc, appUsesSharing, type AppAdminProps, type AppManifest, type AppProps } from "../sdk/types";
 
 const manifests = import.meta.glob<{ manifest: AppManifest }>("../apps/*/manifest.ts", { eager: true });
 const appViews = import.meta.glob<{ default: ComponentType<AppProps> }>("../apps/*/App.tsx", { eager: true });
@@ -153,13 +153,13 @@ function UserView({ entry }: { entry: Entry }) {
 
 /** 基盤の部品: 共有の状態と切り替え、AI の同意。ふつうの表示では帯の中、全画面では右上の小さなボタン */
 function FrameworkMenu({ manifest, inline = false }: { manifest: AppManifest; inline?: boolean }) {
-  const { available: sharingOn, shared, share, unshare, pending } = useAppSharing();
+  const { available: sharingOn, perDoc, shared, share, unshare, pending } = useAppSharing();
   const { available: aiOn, consented, revoke } = useAppAIConsentControl();
   const [open, setOpen] = useState(false);
   if (inline && !sharingOn && !aiOn) return null;
   const badge = sharingOn ? (
     shared ? (
-      <span className="whitespace-nowrap rounded-full bg-amber-100 px-3 py-1 text-sm font-bold text-amber-900">お寺と共有中</span>
+      <span className="whitespace-nowrap rounded-full bg-amber-100 px-3 py-1 text-sm font-bold text-amber-900">{perDoc ? "お寺と共有中（選んだものだけ）" : "お寺と共有中"}</span>
     ) : (
       <span className="whitespace-nowrap rounded-full bg-stone-200 px-3 py-1 text-sm text-stone-700">自分だけ</span>
     )
@@ -216,6 +216,9 @@ function FrameworkMenu({ manifest, inline = false }: { manifest: AppManifest; in
 function AdminView({ entry }: { entry: Entry }) {
   const { manifest, Admin } = entry;
   const data = loadPreviewData(manifest.id);
+  const perDoc = appSharesPerDoc(manifest);
+  // 本体と同じく、1 件ずつの共有のアプリでは印の付いた文書だけを渡す
+  const docs = perDoc ? data.docs.filter((d) => d.shared) : data.docs;
   return (
     <main className="mx-auto max-w-5xl px-4 py-6 text-lg">
       <p className="text-base text-stone-600">管理画面 › お寺のアプリ</p>
@@ -223,7 +226,7 @@ function AdminView({ entry }: { entry: Entry }) {
         {NICKNAME} さん・{manifest.icon} {manifest.name}
       </h1>
       <div className="mt-6 max-w-3xl">
-        {!manifest.sharing ? (
+        {!appUsesSharing(manifest) ? (
           <p className="rounded border border-stone-300 bg-stone-100 px-4 py-3">
             このアプリは、お寺との共有に対応していません（manifest の sharing が false）。本体の管理画面には出ません。
           </p>
@@ -231,10 +234,17 @@ function AdminView({ entry }: { entry: Entry }) {
           <p className="rounded border border-stone-300 bg-stone-100 px-4 py-3">
             共有されていません。本体の管理画面では見えません（利用者の画面で共有すると、ここに Admin.tsx が出ます）。
           </p>
+        ) : perDoc && docs.length === 0 ? (
+          <p className="rounded border border-stone-300 bg-stone-100 px-4 py-3">
+            まだ共有するものが選ばれていません（sharing: "perDoc" のアプリでは、利用者の画面で印を付けた文書だけが、ここに出ます）。
+          </p>
         ) : Admin ? (
-          <Admin manifest={manifest} docs={data.docs} nickname={NICKNAME} />
+          <>
+            {perDoc && <p className="mb-3 text-base text-stone-600">利用者が選んだ {docs.length} 件だけを表示しています（本体の管理画面と同じ）。</p>}
+            <Admin manifest={manifest} docs={docs} nickname={NICKNAME} />
+          </>
         ) : (
-          <p className="text-red-800">sharing: true のアプリには Admin.tsx が必要です</p>
+          <p className="text-red-800">sharing が true か "perDoc" のアプリには Admin.tsx が必要です</p>
         )}
       </div>
     </main>

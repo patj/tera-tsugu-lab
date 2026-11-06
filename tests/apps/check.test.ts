@@ -26,7 +26,7 @@ describe("apps:check", () => {
 
   it("ひな形の manifest は正しく、共有を使う", async () => {
     const r = await checkManifest(path.join(ROOT, "apps/_template"), "_template");
-    assert.deepEqual(r, { problems: [], sharing: true, ai: false });
+    assert.deepEqual(r, { problems: [], sharing: true, perDoc: false, ai: false });
   });
 
   it("DB への直接のアクセス、外部への送信、端末への保存、ディレクトリの外の import を見つける", () => {
@@ -69,6 +69,63 @@ describe("apps:check", () => {
       assert.equal(checkSharingUsage(dir, "x-app", false).length, 1);
       assert.equal(checkSharingUsage(dir, "x-app", true).length, 0);
     });
+  });
+
+  it("1 件ずつの共有: sharing: \"perDoc\" を受け付け、ほかのアプリで setShared や create の shared を使うと知らせる", async () => {
+    const app = [
+      `"use client";`,
+      `import { useAppStorage, useAppSharing } from "@/apps-sdk";`,
+      `export default function App() {`,
+      `  const { create, setShared } = useAppStorage<{ text: string }>();`,
+      `  useAppSharing();`,
+      `  return <button onClick={async () => { const d = await create({ text: "x" }, { shared: true }); if (d) await setShared(d.id, false); }}>x</button>;`,
+      `}`,
+    ].join("\n");
+    const manifest = (sharing: string) => `export const manifest = { id: "x-app", name: "x", description: "x", icon: "x", sharing: ${sharing} };\n`;
+    for (const [sharing, expected] of [
+      [`"perDoc"`, { sharing: true, perDoc: true, usage: 0 }],
+      ["true", { sharing: true, perDoc: false, usage: 1 }],
+    ] as const) {
+      const root = mkdtempSync(path.join(tmpdir(), "temple-apps-"));
+      try {
+        const dir = path.join(root, "x-app");
+        mkdirSync(dir);
+        writeFileSync(path.join(dir, "App.tsx"), app);
+        writeFileSync(path.join(dir, "manifest.ts"), manifest(sharing));
+        const m = await checkManifest(dir, "x-app");
+        assert.deepEqual({ problems: m.problems, sharing: m.sharing, perDoc: m.perDoc }, { problems: [], sharing: expected.sharing, perDoc: expected.perDoc });
+        const usage = checkCapabilityUsage(dir, "x-app", m);
+        assert.equal(usage.length, expected.usage, JSON.stringify(usage));
+        if (expected.usage) assert.match(usage[0].message, /"perDoc" にしてください/);
+      } finally {
+        rmSync(root, { recursive: true, force: true });
+      }
+    }
+    // 自分の useState の setShared は知らせない
+    withTempApp({ "App.tsx": `import { useState } from "react";\nimport { useAppStorage } from "@/apps-sdk";\nexport default function App() { const s = useAppStorage(); const [shared, setShared] = useState(false); setShared(!shared); return null; }\n` }, (dir) => {
+      assert.deepEqual(checkCapabilityUsage(dir, "x-app", { sharing: true, ai: false }), []);
+    });
+  });
+
+  it("sharing の値が正しくないと知らせる。\"perDoc\" でも Admin.tsx が必要", async () => {
+    const root = mkdtempSync(path.join(tmpdir(), "temple-apps-"));
+    try {
+      const dir = path.join(root, "apps", "x-app");
+      mkdirSync(dir, { recursive: true });
+      writeFileSync(path.join(dir, "manifest.ts"), `export const manifest = { id: "x-app", name: "x", description: "x", icon: "x", sharing: "yes" };\n`);
+      assert.match((await checkManifest(dir, "x-app")).problems.map((p) => p.message).join(), /sharing を false、true、"perDoc"/);
+      // 同じパスの manifest.ts は import の結果が残るので、別のアプリにする
+      rmSync(dir, { recursive: true, force: true });
+      const y = path.join(root, "apps", "y-app");
+      mkdirSync(y, { recursive: true });
+      writeFileSync(path.join(y, "manifest.ts"), `export const manifest = { id: "y-app", name: "y", description: "y", icon: "y", sharing: "perDoc" };\n`);
+      writeFileSync(path.join(y, "App.tsx"), `export default function App() { return null; }\n`);
+      writeFileSync(path.join(y, "README.md"), `# y\n`);
+      const problems = await check(root, { registry: false });
+      assert.ok(problems.some((p) => p.file === "Admin.tsx" && /"perDoc"/.test(p.message)), JSON.stringify(problems));
+    } finally {
+      rmSync(root, { recursive: true, force: true });
+    }
   });
 
   it("一覧は静的な import を並べ、Admin.tsx があるアプリだけ Admin を載せる", () => {

@@ -1,6 +1,7 @@
 "use client";
 
 // 開発キット版の useAppStorage / useAppSharing と、AI・素材のつなぎ先。形は本体と同じ（型は types.ts を共有）。
+// - 共有は本体と同じ 2 段: アプリ単位（useAppSharing）と、sharing: "perDoc" のアプリの 1 件ずつの印（create の shared、setShared）
 // - 文書と共有の状態: 本体はサーバーに暗号化して保存するが、キットではブラウザの localStorage に保存する（試すためだけ。アプリのコードは localStorage を使ってはいけない）
 //   本体と同じように、JSON にできない値は JSON にした形で保存し、大きさと件数の上限、エラーの文を再現する
 // - AI: 試す画面のサーバー（vite.config.mts の /__kit/ai/）が、本体と同じ処理（ai-server.ts）で Claude を呼ぶ
@@ -12,7 +13,10 @@ import {
   APP_DOCUMENT_MAX_BYTES,
   appAIConsentVersion,
   appMaxDocs,
+  appSharesPerDoc,
+  appUsesSharing,
   type AppAIResult,
+  type AppCreateOptions,
   type AppDocument,
   type AppManifest,
   type AppSharing,
@@ -27,7 +31,11 @@ const consentKey = (appId: string) => `temple-app-kit:${appId}:ai-consent`;
 export function loadPreviewData(appId: string): PreviewData {
   try {
     const raw = localStorage.getItem(key(appId));
-    if (raw) return JSON.parse(raw) as PreviewData;
+    if (raw) {
+      const data = JSON.parse(raw) as PreviewData;
+      // 以前のキットで保存した文書には、共有の印（shared）がない
+      return { shared: data.shared === true, docs: (data.docs ?? []).map((d) => ({ ...d, shared: d.shared === true })) };
+    }
   } catch {
     // 壊れていたら空にする
   }
@@ -48,6 +56,8 @@ function loadConsent(manifest: AppManifest): boolean {
 }
 
 class KitError extends Error {}
+
+const PER_DOC_UNSUPPORTED = "このアプリは、1 件ずつの共有に対応していません";
 
 /** 本体のサーバーと同じ検証（エラーの文も同じ） */
 function serialize(data: unknown): unknown {
@@ -99,7 +109,8 @@ const StorageContext = createContext<Ctx | null>(null);
 /** 試す画面がアプリを囲む（本体の AppStorageProvider にあたる） */
 export function PreviewStorageProvider({ manifest, assetsBaseUrl, children }: { manifest: AppManifest; assetsBaseUrl: string; children: ReactNode }) {
   const appId = manifest.id;
-  const sharingAvailable = manifest.sharing;
+  const sharingAvailable = appUsesSharing(manifest);
+  const perDoc = appSharesPerDoc(manifest);
   const maxDocs = appMaxDocs(manifest);
   const [data, setData] = useState<PreviewData>(() => loadPreviewData(appId));
   const [pending, setPending] = useState(false);
@@ -130,17 +141,20 @@ export function PreviewStorageProvider({ manifest, assetsBaseUrl, children }: { 
   );
 
   const create = useCallback(
-    (input: unknown) =>
+    (input: unknown, options?: AppCreateOptions) =>
       run<AppDocument | null>((cur) => {
+        if (options?.shared !== undefined && typeof options.shared !== "boolean") throw new KitError("shared は true か false にしてください");
+        const shared = options?.shared === true;
+        if (shared && !perDoc) throw new KitError(PER_DOC_UNSUPPORTED);
         const value = serialize(input);
         if (cur.docs.length >= maxDocs) {
           throw new KitError(`このアプリに保存できるのは ${maxDocs} 件までです。古いものを消してください`);
         }
         const now = new Date().toISOString();
-        const doc: AppDocument = { id: crypto.randomUUID(), createdAt: now, updatedAt: now, data: value };
+        const doc: AppDocument = { id: crypto.randomUUID(), createdAt: now, updatedAt: now, shared, data: value };
         return { next: { ...cur, docs: [doc, ...cur.docs] }, result: doc };
       }, null),
-    [run, maxDocs],
+    [run, maxDocs, perDoc],
   );
 
   const update = useCallback(
@@ -166,6 +180,18 @@ export function PreviewStorageProvider({ manifest, assetsBaseUrl, children }: { 
 
   const removeAll = useCallback(() => run<boolean>((cur) => ({ next: { ...cur, docs: [] }, result: true }), false), [run]);
 
+  /** 1 件ずつの共有の印（更新の日時は変えない。本体と同じ） */
+  const setDocShared = useCallback(
+    (id: string, shared: boolean) =>
+      run<boolean>((cur) => {
+        if (!perDoc) throw new KitError(PER_DOC_UNSUPPORTED);
+        if (typeof shared !== "boolean") throw new KitError("shared は true か false にしてください");
+        if (!cur.docs.some((d) => d.id === id)) throw new KitError("文書が見つかりません");
+        return { next: { ...cur, docs: cur.docs.map((d) => (d.id === id ? { ...d, shared } : d)) }, result: true };
+      }, false),
+    [run, perDoc],
+  );
+
   const setShared = useCallback(
     async (shared: boolean) => {
       setSharingError(null);
@@ -186,9 +212,10 @@ export function PreviewStorageProvider({ manifest, assetsBaseUrl, children }: { 
 
   const value = useMemo<Ctx>(
     () => ({
-      storage: { docs: data.docs, pending, error, create, update, remove, removeAll, clearError: () => setError(null) },
+      storage: { docs: data.docs, pending, error, create, update, remove, removeAll, setShared: setDocShared, clearError: () => setError(null) },
       sharing: {
         available: sharingAvailable,
+        perDoc,
         shared: data.shared,
         pending: sharingPending,
         error: sharingError,
@@ -196,7 +223,7 @@ export function PreviewStorageProvider({ manifest, assetsBaseUrl, children }: { 
         unshare: () => setShared(false),
       },
     }),
-    [data, pending, error, create, update, remove, removeAll, sharingAvailable, sharingPending, sharingError, setShared],
+    [data, pending, error, create, update, remove, removeAll, setDocShared, sharingAvailable, perDoc, sharingPending, sharingError, setShared],
   );
   return (
     <StorageContext.Provider value={value}>

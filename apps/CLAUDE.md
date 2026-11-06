@@ -3,7 +3,7 @@
 このディレクトリには「お寺のアプリ」を置く。住職（またはお寺の人）が「欲しい」と思った機能（日記、占い、写経の記録など）を、1 つのアプリ = 1 つのディレクトリ（`apps/<app-id>/`）で作る。
 人向けの手順書は [docs/apps-guide.md](../docs/apps-guide.md)、仕様は [docs/spec.md](../docs/spec.md) §7。
 
-アプリの利用者は匿名で、データ（文書）は本人のもの。利用者が「お寺と共有する」を選んだアプリのデータだけを、スタッフが読める。
+アプリの利用者は匿名で、データ（文書）は本人のもの。利用者が「お寺と共有する」を選んだアプリのデータだけを、スタッフが読める（`sharing: "perDoc"` のアプリでは、そのうち利用者が 1 件ずつ選んだ文書だけ）。
 保存、暗号化、共有の履歴、監査ログ、AI の呼び出し（キー、同意、上限）は本体（基盤）が受け持つ。アプリの側では、次のルールを必ず守る。
 
 ## 絶対に守ること
@@ -13,6 +13,7 @@
 3. **外部と直接通信しない**。`fetch`、`XMLHttpRequest`、`WebSocket`、外部の URL（画像、フォント、リンクを含む）を使わない。AI は `useAppAI`、素材は `useAppAssets` を使う
 4. `process.env`、`eval`、`"use server"`、`dangerouslySetInnerHTML`、`<script>`、`<iframe>` を使わない
 5. **共有をオンにする前に、何が共有されるかを本人に説明する**（お寺の方が読めるようになる、これまでの分も含む、読むだけ、いつでもやめられる）。説明なしに `share()` を呼ばない。画面を開いただけで共有したり、ほかの操作に紛れて共有したりしない
+   - `sharing: "perDoc"` のアプリでは、さらに: `share()` の前に「選んだものだけを、お寺の方が読めるようになる」と伝える。1 件ずつ印を付ける操作（`setShared`、`create` の `shared`）のそばで「これをお寺の方が読めるようになる（読むだけ、いつでも外せる）」と伝える。印の付いた文書には、共有していると分かる表示を出す。アプリ単位で共有していないときに印を付けたら、まだ見えないことを伝える。印は、利用者が自分で選んだときだけ付ける（初期値や、ほかの操作に紛れて付けない）
 6. **AI の指示（`instructions`）に、利用者の入力を混ぜない**。利用者の入力は `run()` の `text` と `images` で渡す。AI が失敗しても、アプリが止まらないようにする（下の「AI」）
 7. **本体（`src/` など）のファイルは変えない**。基盤に足りない機能があれば、無理をせず、その旨を伝える
 8. 作ったら、必ず `npm run apps:gen` と `npm run apps:check` を流し、違反を 0 にする
@@ -27,7 +28,7 @@
 |---|---|
 | `manifest.ts` | `export const manifest = defineAppManifest({...})`。`id` はディレクトリの名前と同じ（英小文字・数字・`-`。`api` は使えない）。下の「manifest」 |
 | `App.tsx` | 利用者の画面。先頭に `"use client"`。`export default function App({ manifest }: AppProps)` |
-| `Admin.tsx` | スタッフの画面（`sharing: true` のときは必須）。`export default function Admin({ manifest, docs, nickname }: AppAdminProps<T>)`。表示するだけ（読むだけ） |
+| `Admin.tsx` | スタッフの画面（`sharing` が `true` か `"perDoc"` のときは必須）。`export default function Admin({ manifest, docs, nickname }: AppAdminProps<T>)`。表示するだけ（読むだけ） |
 | `ai.ts` | AI の仕事の宣言（AI を使うときだけ）。`export const ai = defineAppAI({...})`。**サーバーで読み込まれる**ので、import できるのは `zod` と `@/apps-sdk` だけ |
 | `assets/` | 画像や音などの素材（使うときだけ）。下の「素材」 |
 | `*.module.css` | アプリ専用の CSS（使うときだけ）。Tailwind のクラスも使える |
@@ -44,7 +45,7 @@ export const manifest = defineAppManifest({
   name: "心のクローゼット",
   description: "その日の気持ちを服にして、脱いで仕舞う日記です。",
   icon: "👗",
-  sharing: false,                 // お寺との共有を使うか（true なら Admin.tsx が必要）
+  sharing: false,                 // お寺との共有: false（使わない）/ true（アプリ単位）/ "perDoc"（1 件ずつ選ぶ）。使うなら Admin.tsx が必要
   display: "fullscreen",          // 省略すると "framed"（お寺の画面の中）
   pwa: { themeColor: "#FBF6EE", backgroundColor: "#FBF6EE", icon: "icon-512.png" }, // ホーム画面に追加したとき（icon は assets/ の 512×512 の PNG）
   storage: { maxDocs: 5000 },     // 文書の件数の上限（1〜10,000。省略すると 1,000）
@@ -75,8 +76,8 @@ type Entry = { date: string; text: string };
 
 export default function App({ manifest }: AppProps) {
   const { docs, create, update, remove, removeAll, pending, error } = useAppStorage<Entry>();
-  // docs: 自分の文書（新しい順）。{ id, createdAt, updatedAt, data: Entry }
-  // create(data) / update(id, data): 成功すると文書、失敗すると null（error に理由が入る）
+  // docs: 自分の文書（新しい順）。{ id, createdAt, updatedAt, shared, data: Entry }（shared は 1 件ずつの共有の印。下の「お寺との共有」）
+  // create(data) / update(id, data): 成功すると文書、失敗すると null（error に理由が入る）。update は共有の印を変えない
   // remove(id) / removeAll(): 成功すると true（元に戻せない）
 }
 ```
@@ -102,6 +103,37 @@ export function SharingPanel() {
 
 - 文言やデザインは自由（例: 「住職に見てもらう」「見せるのをやめる」）。ひな形の `SharingPanel.tsx` が例
 - **オンにする前に、何が共有されるかを説明する**（上のルール 5）。変更は、基盤が履歴と監査ログに残す
+- `sharing` には 2 つの形がある
+  - `true`（アプリ単位）: 共有すると、このアプリの文書がすべて、お寺の方に見える
+  - `"perDoc"`（1 件ずつ）: 「この日の日記だけ見てもらう」のように、利用者が選んだ文書だけが見える。アプリ単位の共有（`share()`）が外側のスイッチで、その中で、印を付けた文書だけが見える。共有をやめると、印があっても見えなくなる（印は残り、共有し直すとまた見える）
+
+#### 1 件ずつの共有（`sharing: "perDoc"` のアプリだけ）
+
+```tsx
+"use client";
+import { useAppSharing, useAppStorage, type AppDocument } from "@/apps-sdk";
+
+export function ShareThisDay({ doc }: { doc: AppDocument<Entry> }) {
+  const { setShared, pending } = useAppStorage<Entry>();
+  const { shared: appShared, perDoc } = useAppSharing();
+  if (!perDoc) return null;
+  return (
+    <div>
+      {doc.shared && <span>お寺と共有中{appShared ? "" : "（お寺との共有をオンにすると見えます）"}</span>}
+      <button disabled={pending} onClick={() => void setShared(doc.id, !doc.shared)}>
+        {doc.shared ? "この日を見せるのをやめる" : "この日をお寺の方に見せる"}
+      </button>
+    </div>
+  );
+}
+```
+
+- 新しい文書は「共有しない」。作るときに選ばせるなら `create(data, { shared: true })`（利用者が選んだときだけ）
+- `setShared(id, shared)`: 成功すると `true`、失敗すると `false`（`error` に理由）。`update` では印は変わらない。印を変えても `updatedAt` は変わらない
+- `useAppSharing().perDoc` が `true` のとき、帯には「お寺と共有中（選んだものだけ）」と出る
+- Admin.tsx の `docs` には、印の付いた文書だけが入る（アプリで隠すのではなく、基盤が絞って渡す）
+- `sharing: true` のアプリで `setShared` や `create` の `shared: true` を使うと、エラーになり、`apps:check` も知らせる
+- `sharing: true` から `"perDoc"` に変えると、それまでの文書には印がないので、お寺の方からは見えなくなる
 
 ### AI（manifest に `ai` を書いたアプリだけ）
 
@@ -195,4 +227,5 @@ const href = await assets.dataUrl("img/shape_coat.webp");       // PNG に書き
 3. `npm run typecheck` と `npm run lint`
 4. `npm run dev` で `/apps` を開き、ニックネームで始めて、作る・直す・消すを試す
 5. `sharing: true` なら、共有し、帯（全画面では右上のボタン）の表示が変わること、管理画面（`/admin/apps`）で Admin.tsx の表示を確かめる。共有をやめると見えなくなることも確かめる
+   - `sharing: "perDoc"` なら、印を付けた文書だけが管理画面に出ること、印を外すと消えること、アプリ単位で共有をやめると印があっても見えないことを確かめる
 6. AI を使うなら、同意の画面が出ること、同意しないときと AI が失敗したときもアプリが止まらないことを確かめる

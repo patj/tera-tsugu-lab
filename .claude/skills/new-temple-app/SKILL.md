@@ -12,7 +12,7 @@ description: 「お寺のアプリ」（apps/<app-id>/。日記、占い、写�
 - だれが、どんなときに使うか
 - 利用者が画面でできること（書く、選ぶ、引く、振り返る など）
 - 保存するもの（1 件の文書に何を入れるか）。保存がいらないアプリもある（その場合も、履歴を残すかを聞く）
-- お寺と共有できるようにするか（`sharing`）。する場合、スタッフの画面で何を見せるか
+- お寺と共有できるようにするか（`sharing`）。共有するなら、アプリ単位（`true`）か、1 件ずつ選んで見せるか（`"perDoc"`。日記なら日ごとに見せたいときなど）。する場合、スタッフの画面で何を見せるか
 - AI を使うか。使うなら、何を送って（文字、写真）、何を返してほしいか（選択肢、名前、ひとこと など）。AI が失敗したときにどうするか（辞書で選ぶ、定型文など）
 - 見た目（お寺の画面の中か、画面全体を使うか）、素材（画像や音）があるか、ホーム画面に追加して使うか
 - アプリの名前と、アイコン（絵文字 1 つ）
@@ -27,8 +27,8 @@ description: 「お寺のアプリ」（apps/<app-id>/。日記、占い、写�
 3. `manifest.ts`: `id` をディレクトリの名前に、`name`、`description`、`icon`、`sharing` を書く。必要なら `display`、`pwa`、`storage`、`ai` も（`apps/CLAUDE.md` の「manifest」）
 4. `types.ts`: 文書の data の型を書く
 5. `App.tsx`: 利用者の画面（`"use client"`）。`useAppStorage<型>()` の `docs` / `create` / `update` / `remove` で読み書きする。`error` を画面に出す。日時は `timeZone: "Asia/Tokyo"` を付けて表示する
-6. `Admin.tsx`: `sharing: true` のとき。共有された文書を表示するだけ。`sharing: false` なら消してよい
-7. `SharingPanel.tsx`: `sharing: true` のとき、共有のボタンをアプリに合った文言とデザインにする（`useAppSharing`）。**オンにする前に、何が共有されるかを必ず説明する**。共有の操作がいらなければ、App.tsx から外して消してよい（利用者は帯のリンクから設定できる）。`sharing: false` なら消す
+6. `Admin.tsx`: `sharing` が `true` か `"perDoc"` のとき（`"perDoc"` では、選ばれた文書だけが届く）。共有された文書を表示するだけ。`sharing: false` なら消してよい
+7. `SharingPanel.tsx`: `sharing` が `true` か `"perDoc"` のとき、共有のボタンをアプリに合った文言とデザインにする（`useAppSharing`）。**オンにする前に、何が共有されるかを必ず説明する**。`"perDoc"` なら、文書ごとに「お寺の方に見せる / やめる」の操作と、見せている印を作る（`useAppStorage` の `setShared`。`apps/CLAUDE.md` の「1 件ずつの共有」）。共有の操作がいらなければ、App.tsx から外して消してよい（利用者は帯のリンクから設定できる）。`sharing: false` なら消す
 8. AI を使うなら `ai.ts`: `defineAppAI` で仕事を宣言する（指示は固定の文、返事の形は `z.object`、選択肢は `z.enum`）。App.tsx では `useAppAI<typeof ai>()` の `run()` を使い、失敗のすべての種類で止まらないようにする（本体では、運用者のキーで Claude を呼ぶ。キーがないときは `unavailable` が返る）
 9. 素材があれば `assets/` に置き、`useAppAssets()` の `url()` / `dataUrl()` で使う（SVG は不可）。アプリ専用の CSS は `*.module.css`
 10. `README.md`: 目的、だれ向けか、文書の形、画面、共有や AI を使うか
@@ -51,5 +51,5 @@ npm run lint
 
 最後に、相手に次を伝える。
 - `npm run dev` のあと（起動中なら `npm run apps:gen` のあと）、`/apps` で試せること（ニックネームで始め、作る・直す・消す）
-- `sharing: true` なら、アプリの共有のボタン（または画面の上の「共有の設定」）で共有し、管理画面の「お寺のアプリ」（`/admin/apps`）で見え方を確かめられること
+- `sharing` が `true` か `"perDoc"` なら、アプリの共有のボタン（または画面の上の「共有の設定」）で共有し、管理画面の「お寺のアプリ」（`/admin/apps`）で見え方を確かめられること
 - 公開の前に、人がコードを読み、`npm run apps:check` をもう一度流すこと

@@ -87,7 +87,7 @@
 SDK と API
 - [x] `POST /apps/api/<app-id>/docs` で `shared` を受け取る。`PUT /apps/api/<app-id>/docs/<doc-id>/sharing`（`{ shared }`）
 - [x] `useAppStorage`: `create(data, { shared })`、`setShared(id, shared)`（失敗すると `false`、`error` に理由）、`docs` の `shared`
-- [ ] `apps:check`: `sharing` の値（`false` / `true` / `"perDoc"`）、`"perDoc"` でも Admin.tsx が必要、`"perDoc"` でないアプリで `setShared` や `create` の `shared` を使ったら知らせる
+- [x] `apps:check`: `sharing` の値（`false` / `true` / `"perDoc"`）、`"perDoc"` でも Admin.tsx が必要、`"perDoc"` でないアプリで `setShared` や `create` の `shared` を使ったら知らせる
 
 画面
 - [x] 帯と全画面の右上のメニュー: `"perDoc"` で共有中なら「お寺と共有中（選んだものだけ）」
@@ -95,11 +95,11 @@ SDK と API
 - [x] 管理画面: 利用者の一覧に見える文書の件数
 
 開発キットとドキュメント
-- [ ] キットの SDK（`kit/sdk/storage.tsx`）と試す画面: 印、`setShared`、スタッフの画面には印の付いた文書だけ。上限とエラーの文は本体と同じ
-- [ ] `apps/CLAUDE.md`（ルール 5 に 1 件ずつの共有の説明、`useAppStorage` の例、manifest の `sharing`）、ひな形、本体とキットの skill、`docs/apps-guide.md`（能力の表、確かめ方、公開の前のチェックリスト）、キットの README / CLAUDE.md
+- [x] キットの SDK（`kit/sdk/storage.tsx`）と試す画面: 印、`setShared`、スタッフの画面には印の付いた文書だけ。上限とエラーの文は本体と同じ
+- [x] `apps/CLAUDE.md`（ルール 5 に 1 件ずつの共有の説明、`useAppStorage` の例、manifest の `sharing`）、ひな形、本体とキットの skill、`docs/apps-guide.md`（能力の表、確かめ方、公開の前のチェックリスト）、キットの README / CLAUDE.md
 
 テストと確認
-- [ ] テスト: 新しい文書は共有しない、印を付けた文書だけがスタッフに渡る（復号もしない）、アプリ単位でやめると印があっても見えない、共有し直すと印の付いた過去の文書が見える、`update` で印が変わらない、他人の文書の印は変えられない、`sharing: true` のアプリで印を使うとエラー、監査ログ（本文とニックネームなし）、MCP の拒否、`apps:check`、キットの SDK の export が本体と同じ
+- [x] テスト: 新しい文書は共有しない、印を付けた文書だけがスタッフに渡る（復号もしない）、アプリ単位でやめると印があっても見えない、共有し直すと印の付いた過去の文書が見える、`update` で印が変わらない、他人の文書の印は変えられない、`sharing: true` のアプリで印を使うとエラー、監査ログ（本文とニックネームなし）、MCP の拒否、`apps:check`、キットの SDK の export が本体と同じ
 - [ ] 確認: 一時的な `"perDoc"` のアプリで、作る → 印を付ける → 共有 → 管理画面で印の付いた文書だけ見える → 印を外す → 見えない → アプリ単位でやめる → 見えない（一時的なアプリとデータは消す）
 
 ## 決めたこと

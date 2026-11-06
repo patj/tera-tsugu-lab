@@ -169,12 +169,18 @@ export function checkAssets(appDir: string, app: string): Problem[] {
 }
 
 /** 使っている SDK の機能が、manifest の宣言と合っているか */
-export function checkCapabilityUsage(appDir: string, app: string, caps: { sharing: boolean; ai: boolean }): Problem[] {
+export function checkCapabilityUsage(appDir: string, app: string, caps: { sharing: boolean; ai: boolean; perDoc?: boolean }): Problem[] {
   const problems: Problem[] = [];
   for (const f of sourceFiles(appDir)) {
     const src = stripComments(readFileSync(f, "utf8"));
     const rel = path.relative(appDir, f);
-    if (!caps.sharing && /\buseAppSharing\b/.test(src)) problems.push({ app, file: rel, message: "useAppSharing を使うときは、manifest の sharing を true にしてください" });
+    if (!caps.sharing && /\buseAppSharing\b/.test(src)) {
+      problems.push({ app, file: rel, message: 'useAppSharing を使うときは、manifest の sharing を true か "perDoc" にしてください' });
+    }
+    // 1 件ずつの共有の印（useAppStorage から取り出した setShared、create の { shared: ... }）。サーバーも断るので、目立つ書き方だけを見る
+    if (!caps.perDoc && (/\{[^}]*\bsetShared\b[^}]*\}\s*=\s*useAppStorage\b/.test(src) || /\buseAppStorage\b[\s\S]*\.setShared\s*\(/.test(src) || /\bcreate\s*\([^;]*?,\s*\{\s*shared\s*:/.test(src))) {
+      problems.push({ app, file: rel, message: '1 件ずつの共有（setShared、create の shared）を使うときは、manifest の sharing を "perDoc" にしてください' });
+    }
     if (!caps.ai && /\buseAppAI\b/.test(src)) problems.push({ app, file: rel, message: "useAppAI を使うときは、manifest に ai を書いてください" });
   }
   return problems;
@@ -192,7 +198,8 @@ function pngSize(file: string): { width: number; height: number } | null {
   return { width: b.readUInt32BE(16), height: b.readUInt32BE(20) };
 }
 
-export type ManifestCheck = { problems: Problem[]; sharing: boolean; ai: boolean };
+/** sharing: true か "perDoc" なら sharing が true。perDoc は "perDoc" のときだけ true */
+export type ManifestCheck = { problems: Problem[]; sharing: boolean; perDoc: boolean; ai: boolean };
 
 /** manifest の中身（読み込んで確かめる） */
 export async function checkManifest(appDir: string, app: string): Promise<ManifestCheck> {
@@ -204,17 +211,17 @@ export async function checkManifest(appDir: string, app: string): Promise<Manife
     manifest = (await import(pathToFileURL(path.join(appDir, "manifest.ts")).href)).manifest;
   } catch (e) {
     add(`manifest.ts を読み込めません: ${(e as Error).message}`);
-    return { problems, sharing: false, ai: false };
+    return { problems, sharing: false, perDoc: false, ai: false };
   }
   if (!manifest || typeof manifest !== "object") {
     add("manifest を export してください（export const manifest = defineAppManifest({...})）");
-    return { problems, sharing: false, ai: false };
+    return { problems, sharing: false, perDoc: false, ai: false };
   }
   if (!app.startsWith("_") && manifest.id !== app) add(`manifest の id（${String(manifest.id)}）をディレクトリの名前（${app}）と同じにしてください`);
   for (const key of ["name", "description", "icon"]) {
     if (typeof manifest[key] !== "string" || !(manifest[key] as string).trim()) add(`manifest の ${key} を書いてください`);
   }
-  if (typeof manifest.sharing !== "boolean") add("manifest の sharing を true か false にしてください");
+  if (typeof manifest.sharing !== "boolean" && manifest.sharing !== "perDoc") add('manifest の sharing を false、true、"perDoc" のどれかにしてください');
   if (manifest.display !== undefined && manifest.display !== "framed" && manifest.display !== "fullscreen") {
     add('manifest の display は "framed" か "fullscreen" にしてください');
   }
@@ -253,7 +260,7 @@ export async function checkManifest(appDir: string, app: string): Promise<Manife
       add(`manifest の ai.dailyLimit は 1〜${APP_AI_LIMITS.maxDailyLimit} にしてください`);
     }
   }
-  return { problems, sharing: manifest.sharing === true, ai: ai !== undefined };
+  return { problems, sharing: manifest.sharing === true || manifest.sharing === "perDoc", perDoc: manifest.sharing === "perDoc", ai: ai !== undefined };
 }
 
 /** ai.ts（AI の仕事の宣言）を読み込んで確かめる */
@@ -361,7 +368,7 @@ export async function check(root = ROOT, opts: { registry?: boolean } = {}): Pro
       problems.push(...checkCapabilityUsage(dir, app, m));
       problems.push(...(await checkAiTasks(dir, app, m.ai)));
       if (m.sharing && !existsSync(path.join(dir, "Admin.tsx"))) {
-        problems.push({ app, file: "Admin.tsx", message: "sharing: true のアプリには、スタッフの画面（Admin.tsx）が必要です" });
+        problems.push({ app, file: "Admin.tsx", message: 'sharing が true か "perDoc" のアプリには、スタッフの画面（Admin.tsx）が必要です' });
       }
     }
   }
