@@ -6,3 +6,4 @@ export * from "./calendar";
 export * from "./facility";
 export * from "./forms";
 export * from "./portal";
+export * from "./care";

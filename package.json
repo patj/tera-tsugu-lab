@@ -13,7 +13,11 @@
     "db:seed": "tsx --env-file-if-exists=.env src/db/seed/index.ts",
     "db:reset": "tsx --env-file-if-exists=.env scripts/db-reset.ts",
     "mcp": "tsx --env-file-if-exists=.env src/mcp/server.ts",
-    "mcp:config": "tsx --env-file-if-exists=.env scripts/mcp-config.ts"
+    "mcp:config": "tsx --env-file-if-exists=.env scripts/mcp-config.ts",
+    "tools:gen": "tsx scripts/care-tools.ts gen",
+    "tools:check": "tsx scripts/care-tools.ts check",
+    "predev": "npm run tools:gen",
+    "prebuild": "npm run tools:gen"
   },
   "dependencies": {
     "@modelcontextprotocol/sdk": "^1.32.2",
