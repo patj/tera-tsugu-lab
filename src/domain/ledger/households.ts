@@ -455,3 +455,15 @@ export async function setHouseholdRoles(
   }
   if (Object.keys(next).length) await conn.update(households).set(next).where(eq(households.id, householdId));
 }
+
+/** 世帯の名前（〇〇家）をまとめて引く（03 の予約の一覧などで使う） */
+export async function getHouseholdNamesByIds(ids: string[], conn: DbOrTx = db): Promise<Map<string, string>> {
+  const out = new Map<string, string>();
+  if (ids.length === 0) return out;
+  const rows = await conn
+    .select({ id: households.id, name: households.name })
+    .from(households)
+    .where(inArray(households.id, ids));
+  for (const r of rows) out.set(r.id, r.name);
+  return out;
+}

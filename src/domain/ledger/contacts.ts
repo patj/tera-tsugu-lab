@@ -1,5 +1,5 @@
 // 対応記録（contact_logs）と一般コンタクト（contacts）
-import { asc, eq } from "drizzle-orm";
+import { asc, eq, inArray } from "drizzle-orm";
 import { db, type DbOrTx } from "@/db/client";
 import { contactLogs, contacts } from "@/db/schema";
 import { getStaffById, invalid, isStaff, type Actor } from "@/domain/core";
@@ -105,4 +105,13 @@ export async function listContacts(actor: Actor, conn: DbOrTx = db): Promise<Con
 export async function getContactById(id: string, conn: DbOrTx = db): Promise<Contact | null> {
   const [r] = await conn.select().from(contacts).where(eq(contacts.id, id));
   return r ? { id: r.id, name: r.name, phone: r.phone, email: r.email, createdAt: r.createdAt } : null;
+}
+
+/** 一般コンタクトをまとめて引く（03 の予約の一覧に申請者の名前を出すため） */
+export async function getContactsByIds(ids: string[], conn: DbOrTx = db): Promise<Map<string, Contact>> {
+  const out = new Map<string, Contact>();
+  if (ids.length === 0) return out;
+  const rows = await conn.select().from(contacts).where(inArray(contacts.id, ids));
+  for (const r of rows) out.set(r.id, { id: r.id, name: r.name, phone: r.phone, email: r.email, createdAt: r.createdAt });
+  return out;
 }
