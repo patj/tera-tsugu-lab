@@ -9,6 +9,7 @@ import { calendarSeed } from "./calendar";
 import { facilitySeed } from "./facility";
 import { formsSeed } from "./forms";
 import { memorialSeed } from "./memorial";
+import { portalSeed } from "./portal";
 
 const SEEDS: Seed[] = [
   coreSeed,
@@ -17,6 +18,7 @@ const SEEDS: Seed[] = [
   facilitySeed,
   formsSeed,
   memorialSeed,
+  portalSeed,
 ];
 
 export async function runSeeds(): Promise<SeedContext> {

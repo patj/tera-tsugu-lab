@@ -8,4 +8,5 @@ export const ADMIN_NAV: NavItem[] = [
   { href: "/admin/facility", label: "施設予約" },
   { href: "/admin/forms", label: "行事・アンケート" },
   { href: "/admin/memorial", label: "年忌法要" },
+  { href: "/admin/portal", label: "檀家ポータル" },
 ];
