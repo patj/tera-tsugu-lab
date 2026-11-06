@@ -71,6 +71,8 @@ export type BookMemorialServiceInput = {
   seshuName?: string | null;
   /** 省略すると申し込みの場所。申し込みがなければお寺 */
   location?: MemorialLocation | null;
+  /** 自宅・墓前のときの場所の住所。省略すると、自宅なら世帯の住所、墓前なら世帯のお墓の場所 */
+  locationAddress?: string | null;
   /** 法要の始まり */
   start: Date;
   /** 法要の担当者（is_officiant のスタッフ） */
@@ -101,6 +103,8 @@ export type MemorialBookingPlan = {
   joint: boolean;
   seshu: { seshuPersonId: string | null; seshuName: string | null; display: string | null; relation: string | null };
   location: MemorialLocation;
+  /** 自宅・墓前のときの場所の住所（番地まで。MCP では市までにして返す）。お寺のときと、わからないときは null */
+  locationAddress: string | null;
   start: Date;
   end: Date;
   durationMin: number;
@@ -189,6 +193,12 @@ export async function planMemorialBooking(
   const durationMin = checkDuration(input.durationMin, settings);
   const travelBeforeMin = location === "temple" ? null : checkTravel(input.travelBeforeMin, "行き");
   const travelAfterMin = location === "temple" ? null : checkTravel(input.travelAfterMin, "帰り");
+  const locationAddress =
+    location === "temple"
+      ? null
+      : (optText(input.locationAddress, "場所の住所", 200) ??
+        (location === "home" ? household.address : household.graveAddress) ??
+        null);
   if (!isUuid(input.officiantStaffId)) throw invalid("法要の担当者を指定してください");
   const [officiant] = await resolveOfficiants(actor.templeId, [input.officiantStaffId], conn);
   const start = input.start;
@@ -252,7 +262,7 @@ export async function planMemorialBooking(
   const eventBody = [
     `故人: ${targets.map((t) => `${t.relation ?? ""} ${t.name}（${t.homyo ?? "法号なし"}）${t.kaikiName}`).join(" / ")}`,
     `法要: ${jstTimeString(start)}〜${jstTimeString(end)}（${holdNote}）`,
-    `場所: ${LOCATION_LABELS[location]}${location !== "temple" && household.address ? `（${household.address}）` : ""}`,
+    `場所: ${LOCATION_LABELS[location]}${locationAddress ? `（${locationAddress}）` : ""}`,
     seshu.display ? `施主: ${seshu.display}` : null,
     input.notes?.trim() ? `メモ: ${input.notes.trim()}` : null,
   ]
@@ -267,6 +277,7 @@ export async function planMemorialBooking(
     joint: targets.length > 1,
     seshu,
     location,
+    locationAddress,
     start,
     end,
     durationMin,
@@ -330,6 +341,7 @@ export async function bookMemorialService(
         seshuPersonId: plan.seshu.seshuPersonId,
         seshuName: plan.seshu.seshuName,
         location: plan.location,
+        locationAddress: plan.locationAddress,
         startAt: plan.start,
         durationMin: plan.durationMin,
         travelBeforeMin: plan.travelBeforeMin,
@@ -531,6 +543,8 @@ export async function listMemorialServices(
 
 export type MemorialServiceDetail = MemorialServiceSummary & {
   household: { id: string; name: string; address: string | null; phone: string | null };
+  /** 自宅・墓前のときの場所の住所（記録がなければ、自宅は世帯の住所） */
+  locationAddress: string | null;
   seshuDisplay: string | null;
   travelBeforeMin: number | null;
   travelAfterMin: number | null;
@@ -592,6 +606,7 @@ export async function getMemorialService(actor: Actor, id: string, conn: DbOrTx 
     ...summary,
     household: { id: row.householdId, name: h?.name ?? "（不明な世帯）", address: h?.address ?? null, phone: h?.phone ?? null },
     seshuDisplay: seshuP ? fullName(seshuP) : row.seshuName,
+    locationAddress: location === "temple" ? null : (row.locationAddress ?? (location === "home" ? (h?.address ?? null) : null)),
     travelBeforeMin: row.travelBeforeMin,
     travelAfterMin: row.travelAfterMin,
     hold,
@@ -632,9 +647,22 @@ export async function getMemorialServiceOutlines(
   return new Map(
     summaries.map((s) => {
       const row = rows.find((r) => r.id === s.id)!;
-      const address = s.location === "home" ? (hh.get(row.householdId)?.address ?? null) : null;
+      const address = s.location === "temple" ? null : (row.locationAddress ?? (s.location === "home" ? (hh.get(row.householdId)?.address ?? null) : null));
       const kaikiNames = [...new Set(s.targets.map((t) => t.kaikiName))].join("・");
       return [s.id, { id: s.id, kaikiNames, joint: s.joint, location: s.location, address }];
     }),
   );
+}
+
+/** 法要の場所の住所の初期値: 自宅なら世帯の住所、墓前なら世帯のお墓の場所、お寺なら null（管理画面の受付のフォームに入れる） */
+export async function defaultLocationAddress(
+  actor: Actor,
+  householdId: string,
+  location: MemorialLocation,
+  conn: DbOrTx = db,
+): Promise<string | null> {
+  assertStaff(actor);
+  if (location === "temple") return null;
+  const h = await requireHousehold(actor.templeId, householdId, conn);
+  return (location === "home" ? h.address : h.graveAddress) ?? null;
 }

@@ -15,6 +15,8 @@ export const memorialServices = pgTable("memorial_services", {
   seshuName: text("seshu_name"),
   /** temple（寺）/ home（自宅）/ grave（墓前） */
   location: text("location").notNull(),
+  /** 自宅・墓前のときの場所の住所（初期値は世帯の住所 / 世帯のお墓の場所。受付のときに変えられる。spec.md §3） */
+  locationAddress: text("location_address"),
   startAt: ts("start_at").notNull(),
   durationMin: integer("duration_min").notNull(),
   /** 自宅・墓前のときの移動時間（行き・帰り） */

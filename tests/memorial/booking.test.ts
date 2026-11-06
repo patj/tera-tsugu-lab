@@ -392,4 +392,30 @@ describe("確定（bookMemorialService）と取り消し", () => {
     await assert.rejects(bookMemorialService(staff, base(), db, { now: NOW }), /住職 高橋 日照は.*10:30〜10:45/);
     await db.update(staffEvents).set({ cancelledAt: new Date() }).where(eq(staffEvents.title, "テストの来客"));
   });
+
+  it("場所の住所: 墓前は世帯のお墓の場所、自宅は世帯の住所が初期値。指定すれば変えられる。お寺は持たない", async () => {
+    // シード: 渡辺家の墓前の法要（12/5）は、世帯のお墓の場所（府中）になっている
+    const watanabe = seed.get("household:watanabe");
+    const [grave] = await db.select().from(memorialServices).where(eq(memorialServices.householdId, watanabe));
+    assert.equal(grave.location, "grave");
+    assert.equal(grave.locationAddress, "東京都府中市多磨町 4-628-2");
+    assert.equal((await getMemorialService(staff, grave.id)).locationAddress, "東京都府中市多磨町 4-628-2");
+
+    const travel = { travelBeforeMin: 20, travelAfterMin: 20 };
+    const home = await planMemorialBooking(staff, { ...base(), location: "home", ...travel }, db, { now: NOW });
+    assert.equal(home.locationAddress, "東京都武蔵野市本町 2-3-5");
+    assert.match(home.eventBody, /場所: 自宅（東京都武蔵野市本町 2-3-5）/);
+    // 山田家のお墓は境内（台帳に住所がない）
+    const graveYamada = await planMemorialBooking(staff, { ...base(), location: "grave", ...travel }, db, { now: NOW });
+    assert.equal(graveYamada.locationAddress, null);
+    const other = await planMemorialBooking(
+      staff,
+      { ...base(), location: "grave", ...travel, locationAddress: "東京都小平市小平霊園 1-1" },
+      db,
+      { now: NOW },
+    );
+    assert.equal(other.locationAddress, "東京都小平市小平霊園 1-1");
+    const temple = await planMemorialBooking(staff, { ...base(), locationAddress: "東京都小平市" }, db, { now: NOW });
+    assert.equal(temple.locationAddress, null);
+  });
 });

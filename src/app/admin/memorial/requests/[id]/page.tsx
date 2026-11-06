@@ -135,6 +135,7 @@ export default async function MemorialRequestDetailPage({ params, searchParams }
             ) : (
               <BookingSection
                 actor={actor}
+                householdId={r.householdId}
                 periods={periods}
                 location={r.location}
                 targetPersonIds={r.targets.map((t) => t.personId)}

@@ -26,7 +26,7 @@ import {
   type VerifyCandidate,
 } from "@/domain/memorial";
 import { defineReadTool, defineWriteTool, type ToolContext, type ToolDef } from "../framework/define";
-import { adminUrl, areaOf, householdLabel, personLabel, relationLabel, SEE_ADMIN } from "../framework/present";
+import { adminUrl, areaOf, cityOf, householdLabel, personLabel, relationLabel, SEE_ADMIN } from "../framework/present";
 
 const WEEKDAYS = ["日", "月", "火", "水", "木", "金", "土"];
 const dateLabel = (date: string) => `${date}（${WEEKDAYS[jstParts(jst(date)).weekday]}）`;
@@ -375,6 +375,14 @@ const bookInput = {
   officiant: z.string().describe("法要の担当者（名前か役職。例: 「住職」「副住職」「執事長」）"),
   location: locationArg.optional().describe("場所: temple（お寺。本堂を押さえる）/ home（自宅）/ grave（墓前）。省略するとお寺（申し込みならその場所）"),
   ...travelArgs,
+  location_address: z
+    .string()
+    .max(200)
+    .optional()
+    .describe(
+      "自宅・墓前のときの場所の住所。省略すると、自宅なら世帯の住所、墓前なら世帯のお墓の場所（台帳）。" +
+        "住職が別の場所を言ったときだけ指定する（例: 「府中の霊園で」→ 住職に住所を尋ねる）",
+    ),
   seshu_person_id: z.string().optional().describe("施主（台帳の家族の person_id）。省略すると、申し込みの施主か、世帯の窓口"),
   seshu_name: z.string().optional().describe("施主が台帳にいない人のときの名前（seshu_person_id とどちらか 1 つ）"),
   duration_min: z.number().int().min(10).max(240).optional().describe("法要の長さ（分）。省略するとお寺の設定（40 分）"),
@@ -396,10 +404,18 @@ async function toBookingInput(args: BookArgs, ctx: ToolContext) {
     durationMin: args.duration_min ?? null,
     travelBeforeMin: args.travel_before_min ?? null,
     travelAfterMin: args.travel_after_min ?? null,
+    locationAddress: args.location_address ?? null,
     seshuPersonId: args.seshu_person_id ?? null,
     seshuName: args.seshu_name ?? null,
     notes: args.notes ?? null,
   };
+}
+
+/** 自宅・墓前の場所は市までにする（「（府中市。番地は管理画面で確認）」）。住所がわからなければ、そう伝える */
+function placeNote(plan: MemorialBookingPlan): string {
+  if (plan.location === "temple") return "";
+  const city = cityOf(plan.locationAddress);
+  return city ? `（${city}。番地は管理画面で確認）` : "（場所の住所が台帳にありません。住職に尋ねて location_address で指定するか、管理画面で確認）";
 }
 
 function previewOf(plan: MemorialBookingPlan, args: unknown): string {
@@ -413,7 +429,7 @@ function previewOf(plan: MemorialBookingPlan, args: unknown): string {
     "次の内容で法要を登録します（まだ登録していません）。",
     `■ 法要: ${householdLabel(plan.household, args)} ${targets}${plan.joint ? `〔${JOINT_SERVICE_LABEL}〕` : ""}`,
     `  日時: ${formatJst(plan.start)}〜${jstTimeString(plan.end)}（${plan.durationMin} 分）`,
-    `  場所: ${LOCATION_LABELS[plan.location]}${plan.location !== "temple" && plan.household.address ? `（${areaOf(plan.household.address)}。番地は管理画面で確認）` : ""}`,
+    `  場所: ${LOCATION_LABELS[plan.location]}${placeNote(plan)}`,
     `  法要の担当者: ${officiant}`,
     `  施主: ${seshuLabel({ relation: plan.seshu.relation, personId: plan.seshu.seshuPersonId, name: plan.seshu.seshuName }) ?? "（未定）"}`,
     `■ 担当者の予定: ${officiant}のカレンダーに法要の予定（${rangeLabel(plan.hold)}、${holdNote}）を業務の予定として登録します`,
@@ -448,7 +464,7 @@ const bookMemorialServiceTool = defineWriteTool({
         故人: plan.targets.map(targetOut),
         複数霊位供養: plan.joint,
         日時: `${formatJst(plan.start)}〜${jstTimeString(plan.end)}`,
-        場所: LOCATION_LABELS[plan.location],
+        場所: `${LOCATION_LABELS[plan.location]}${placeNote(plan)}`,
         法要の担当者: `${plan.officiant.roleTitle} ${plan.officiant.name}`,
         担当者の予定: rangeLabel(plan.hold),
         本堂の予約: plan.hall ? rangeLabel(plan.hold) : null,
@@ -466,7 +482,7 @@ const bookMemorialServiceTool = defineWriteTool({
         内容: serviceLabel(p.targets, p.joint),
         故人: p.targets.map((t) => `${personLabel(t)}の${t.kaikiName}`),
         日時: `${formatJst(p.start)}〜${jstTimeString(p.end)}`,
-        場所: LOCATION_LABELS[p.location],
+        場所: `${LOCATION_LABELS[p.location]}${p.location === "temple" ? "" : cityOf(p.locationAddress) ? `（${cityOf(p.locationAddress)}）` : ""}`,
         法要の担当者: `${p.officiant.roleTitle} ${p.officiant.name}`,
         施主: seshuLabel({ relation: p.seshu.relation, personId: p.seshu.seshuPersonId, name: p.seshu.seshuName }),
       },

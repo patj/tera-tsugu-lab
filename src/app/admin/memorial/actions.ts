@@ -26,7 +26,7 @@ function toError(e: unknown): ActionState {
 /**
  * 法要を確定する。
  * 送る値: slot（"YYYY-MM-DD|HH:MM|担当者の ID"）、target（"person_id:回忌"。複数）、memorialRequestId か householdId、
- * location、travelBefore、travelAfter（自宅・墓前）、seshuPersonId / seshuName、notes
+ * location、travelBefore、travelAfter、locationAddress（自宅・墓前）、seshuPersonId / seshuName、notes
  */
 export async function bookAction(_prev: ActionState, fd: FormData): Promise<ActionState> {
   const actor = await getStaffActor();
@@ -53,6 +53,7 @@ export async function bookAction(_prev: ActionState, fd: FormData): Promise<Acti
       officiantStaffId,
       travelBeforeMin: optInt(fd, "travelBefore"),
       travelAfterMin: optInt(fd, "travelAfter"),
+      locationAddress: str(fd, "locationAddress") || null,
       seshuPersonId: str(fd, "seshuPersonId") || null,
       seshuName: str(fd, "seshuName") || null,
       notes: str(fd, "notes") || null,

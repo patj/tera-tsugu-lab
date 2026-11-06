@@ -56,7 +56,7 @@ export default async function MemorialServiceDetailPage({ params, searchParams }
           </Row>
           <Row label="場所">
             {LOCATION_LABELS[s.location]}
-            {s.location !== "temple" && s.household.address && <span className="text-stone-600">（{s.household.address}）</span>}
+            {s.locationAddress && <span className="text-stone-600">（{s.locationAddress}）</span>}
           </Row>
           <Row label="法要の担当者">{s.officiant.label}</Row>
           <Row label="押さえる時間">

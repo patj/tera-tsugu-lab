@@ -32,6 +32,8 @@ type SeedHousehold = {
   postalCode?: string;
   address: string;
   phone: string;
+  /** お墓の場所（ほかの墓地のとき。境内の墓地なら省略） */
+  graveAddress?: string;
   status?: "active" | "left" | "moved";
   joinedOn: string;
   head: string;
@@ -205,6 +207,8 @@ const SCENE_HOUSEHOLDS: SeedHousehold[] = [
     kana: "わたなべ",
     address: "東京都武蔵野市若葉台 1-1-1",
     phone: "0422-55-0707",
+    // お墓は境内ではなく、府中の霊園にある（墓前の法要の場所の初期値。spec.md §2）
+    graveAddress: "東京都府中市多磨町 4-628-2",
     joinedOn: "1960-01-01",
     head: "head",
     people: [
@@ -442,6 +446,7 @@ async function insertHousehold(ctx: SeedContext, h: SeedHousehold): Promise<void
       postalCode: h.postalCode ?? null,
       address: h.address,
       phone: h.phone,
+      graveAddress: h.graveAddress ?? null,
       status: h.status ?? "active",
       joinedOn: h.joinedOn,
       notes: h.notes ?? null,

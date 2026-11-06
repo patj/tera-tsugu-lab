@@ -36,6 +36,8 @@ export default async function HouseholdPage({ params, searchParams }: PageProps<
         </dd>
         <dt className="text-stone-500">固定電話</dt>
         <dd>{h.phone}</dd>
+        <dt className="text-stone-500">お墓の場所</dt>
+        <dd>{h.graveAddress ?? "境内の墓地（または未登録）"}</dd>
         <dt className="text-stone-500">世帯主</dt>
         <dd>{h.head?.name ?? "（未設定）"}</dd>
         <dt className="text-stone-500">窓口</dt>

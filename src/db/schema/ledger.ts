@@ -25,6 +25,8 @@ export const households = pgTable("households", {
   address: text("address"),
   /** 固定電話 */
   phone: text("phone"),
+  /** お墓の場所（住所。境内の墓地なら空）。墓前の法要の場所の初期値にする（spec.md §2、§3） */
+  graveAddress: text("grave_address"),
   /** active（檀家）/ left（離檀）/ moved（転出） */
   status: text("status").notNull().default("active"),
   joinedOn: date("joined_on"),

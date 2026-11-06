@@ -57,6 +57,7 @@ function householdInput(fd: FormData): HouseholdInput {
     postalCode: str(fd, "postalCode"),
     address: str(fd, "address"),
     phone: str(fd, "phone"),
+    graveAddress: str(fd, "graveAddress"),
     status: str(fd, "status") || "active",
     joinedOn: str(fd, "joinedOn"),
     notes: str(fd, "notes"),

@@ -1,11 +1,13 @@
 // 候補の日時を出して確定する部分（申し込みの詳細と、電話で受けた法要の登録で共通に使う）
 import { isDomainError, type Actor } from "@/domain/core";
-import { findMemorialSlots, type FindMemorialSlotsResult, type MemorialLocation } from "@/domain/memorial";
+import { defaultLocationAddress, findMemorialSlots, type FindMemorialSlotsResult, type MemorialLocation } from "@/domain/memorial";
 import { BookForm } from "./forms";
 import { input, SlotPicker } from "./ui";
 
 type Props = {
   actor: Actor;
+  /** 場所の住所の初期値（自宅は世帯の住所、墓前はお墓の場所）を取るため */
+  householdId: string;
   periods: { from: string; to: string }[];
   location: MemorialLocation;
   targetPersonIds: string[];
@@ -25,6 +27,7 @@ export async function BookingSection(props: Props) {
     return <TravelForm keep={props.keep} travelBefore={travelBefore} travelAfter={travelAfter} />;
   }
 
+  const address = needsTravel ? await defaultLocationAddress(props.actor, props.householdId, location) : null;
   let result: FindMemorialSlotsResult | null = null;
   let error: string | null = null;
   try {
@@ -57,6 +60,15 @@ export async function BookingSection(props: Props) {
             </>
           )}
           <SlotPicker result={result} />
+          {needsTravel && (
+            <label className="block max-w-2xl">
+              <span className="block font-medium">場所の住所</span>
+              <input name="locationAddress" defaultValue={address ?? ""} className={input} placeholder="例: 東京都府中市多磨町 4-628" />
+              <span className="mt-1 block text-sm text-stone-500">
+                {location === "home" ? "初期値は世帯の住所です。" : "初期値は世帯のお墓の場所です。"}ほかの場所なら書き換えてください
+              </span>
+            </label>
+          )}
           <label className="block max-w-2xl">
             <span className="block font-medium">メモ（任意。担当者の予定にも載ります）</span>
             <input name="notes" className={input} placeholder="例: 塔婆 3 本" />

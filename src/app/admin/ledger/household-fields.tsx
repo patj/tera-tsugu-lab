@@ -22,6 +22,11 @@ export function HouseholdFields({ household }: { household?: HouseholdDetail }) 
           <input name="address" defaultValue={household?.address ?? ""} className={inputClass} />
         </Field>
       </div>
+      <div className="sm:col-span-2">
+        <Field label="お墓の場所" hint="ほかの墓地なら住所。境内の墓地なら空のまま。墓前の法要の場所の初期値になる">
+          <input name="graveAddress" defaultValue={household?.graveAddress ?? ""} className={inputClass} />
+        </Field>
+      </div>
       <Field label="状態" hint="離檀・転出も、ここで変える（台帳からは消さない）">
         <select name="status" defaultValue={household?.status ?? "active"} className={inputClass}>
           {HOUSEHOLD_STATUSES.map((s) => (

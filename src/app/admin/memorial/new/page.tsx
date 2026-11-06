@@ -208,6 +208,7 @@ async function Step2({
           </h2>
           <BookingSection
             actor={actor}
+            householdId={result.person.household.id}
             periods={[{ from, to }]}
             location={location}
             targetPersonIds={[personId, ...chosenJoint.map((j) => j.personId)]}

@@ -16,6 +16,7 @@ import {
   formResponses,
   households,
   memorialRequests,
+  memorialServices,
   persons,
   reservations,
   staffEvents,
@@ -80,6 +81,8 @@ async function collectSecrets(): Promise<[string, string][]> {
     list.push(["世帯の住所（番地まで）", h.address]);
     if (h.address && areaOf(h.address) !== h.address) list.push(["世帯の住所（番地）", h.address.replace(/^.*?[都道府県]/, "")]);
     list.push(["世帯の電話", h.phone], ["世帯のメモ", h.notes]);
+    list.push(["お墓の場所（番地まで）", h.graveAddress]);
+    if (h.graveAddress) list.push(["お墓の場所（町名と番地）", h.graveAddress.replace(/^.*?[都道府県].*?[市区町村]/, "")]);
   }
   for (const p of await db.select().from(persons)) {
     list.push(["携帯", p.mobilePhone], ["メール", p.email], ["生年月日", p.birthDate], ["個人のメモ", p.notes]);
@@ -93,6 +96,9 @@ async function collectSecrets(): Promise<[string, string][]> {
   for (const l of await db.select().from(contactLogs)) list.push(["対応記録の本文", l.body]);
   for (const r of await db.select().from(memorialRequests)) list.push(["申し込みの連絡事項", r.notes]);
   for (const r of await db.select().from(reservations)) list.push(["施設の予約の内容", r.notes], ["施設の予約の件名", r.title]);
+  for (const m of await db.select().from(memorialServices)) {
+    if (m.locationAddress) list.push(["法要の場所の住所（町名と番地）", m.locationAddress.replace(/^.*?[都道府県].*?[市区町村]/, "")]);
+  }
   for (const e of await db.select().from(staffEvents).where(isNotNull(staffEvents.memorialServiceId))) {
     list.push(["法要の予定の件名", e.title]);
   }
@@ -135,6 +141,8 @@ describe("MCP のツールは、返さないと決めた情報を LLM に返さ�
       "申請者の名前（伏せる前）",
       "施設の予約の件名",
       "法要の予定の件名",
+      "お墓の場所（町名と番地）",
+      "法要の場所の住所（町名と番地）",
     ]) {
       assert.ok(kinds.has(k), `シードに${k}がない`);
     }
@@ -223,6 +231,10 @@ describe("MCP のツールは、返さないと決めた情報を LLM に返さ�
     const memorials = (cal.events as Obj[]).filter((e) => e["法要"] === true);
     assert.ok(memorials.length > 0);
     assert.ok(memorials.every((e) => e["内容"] === undefined && /\/admin\/memorial\/services\//.test(e["管理画面"] as string)));
+    // 場所は市まで: 渡辺家の墓前（お墓の場所は府中）、伊藤家の自宅（武蔵野市）
+    const places = memorials.map((e) => `${e.date} ${e["タイトル"]} ${e["場所"]}`);
+    assert.ok(places.some((p) => /12-05.*法要（三十三回忌） 墓前（府中市）/.test(p)), places.join("\n"));
+    assert.ok(places.some((p) => /12-19.*法要（十三回忌） ご自宅（武蔵野市）/.test(p)), places.join("\n"));
 
     assertNoSecrets("check_staff_availability", await call("check_staff_availability", { from: "2026-12-01", to: "2026-12-31" }));
     // 自宅の法要（2026-12-19 10:00、副住職）と重なる予定のプレビュー。重なりの警告に法要の予定の内容を出さない

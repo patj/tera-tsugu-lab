@@ -74,6 +74,8 @@ export type ContactLogEntry = {
 
 export type HouseholdDetail = HouseholdSummary & {
   postalCode: string | null;
+  /** お墓の場所（住所。境内の墓地なら null） */
+  graveAddress: string | null;
   joinedOn: string | null;
   notes: string | null;
   /** 生きている家族 */
@@ -268,6 +270,7 @@ export async function getHousehold(
     head: headP ? { id: headP.id, name: fullName(headP) } : null,
     contact: contactP ? { id: contactP.id, name: fullName(contactP) } : null,
     postalCode: row.postalCode,
+    graveAddress: row.graveAddress,
     joinedOn: row.joinedOn,
     notes: row.notes,
     members,
@@ -418,6 +421,8 @@ export type HouseholdInput = {
   postalCode?: string | null;
   address?: string | null;
   phone?: string | null;
+  /** お墓の場所。省略（undefined）すると変えない */
+  graveAddress?: string | null;
   status?: HouseholdStatus | string;
   joinedOn?: string | null;
   notes?: string | null;
@@ -430,6 +435,7 @@ function householdValues(input: HouseholdInput) {
     postalCode: optText(input.postalCode, "郵便番号", 10),
     address: optText(input.address, "住所", 200),
     phone: optText(input.phone, "電話", 30),
+    ...(input.graveAddress === undefined ? {} : { graveAddress: optText(input.graveAddress, "お墓の場所", 200) }),
     status: reqStatus(input.status),
     joinedOn: optDate(input.joinedOn, "入檀日"),
     notes: optText(input.notes, "備考", 2000),
