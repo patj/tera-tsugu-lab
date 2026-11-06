@@ -5,7 +5,9 @@ import { defineReadTool, defineWriteTool, type ToolDef } from "../framework/defi
 
 const whoami = defineReadTool({
   name: "whoami",
-  description: "操作者（MCP_ACTOR のスタッフ）、お寺、今の日時（日本時間）、スタッフの一覧を返す。会話の最初に、今日の日付を確かめるのに使う。",
+  description:
+    "操作者（MCP_ACTOR のスタッフ）、お寺、今の日時（日本時間）、スタッフの一覧を返す。会話の最初に、今日の日付を確かめるのに使う。" +
+    "スタッフの「法要の担当者」は、法要を担当できる人（is_officiant）。「導師」とは言わず「法要の担当者」と表現する。",
   input: {},
   handler: async (_args, { actor, now }) => {
     const temple = await getTemple(actor.templeId);
@@ -15,7 +17,7 @@ const whoami = defineReadTool({
       now: formatJst(now),
       temple: { name: temple.name, sect: temple.preset.label },
       actor: me && { name: me.name, role: me.roleTitle },
-      staff: staff.map((s) => ({ name: s.name, role: s.roleTitle, is_officiant: s.isOfficiant })),
+      staff: staff.map((s) => ({ name: s.name, role: s.roleTitle, 法要の担当者: s.isOfficiant })),
     };
   },
 });

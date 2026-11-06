@@ -105,6 +105,10 @@
 - `audit_logs` に `result`（ok / needs_confirmation / error: ...）の列を足した（spec.md §4 の「結果」を残すため）
 - `staff` に `kana` と `position`（表示順）、`staff_events` に `cancelled_at` の列を足した
 
+## 確認の結果
+- 2026-11-06: Claude Desktop から `whoami`、`debug_write_note` のプレビューと `confirm_action`、同じ確認の 2 回目の拒否を確かめた（ユーザー）
+- `whoami` で `is_officiant` が「導師」と表現されたので、MCP の出力と説明文では「法要の担当者」と呼ぶようにした（サーバーの instructions、`whoami` の出力、CLAUDE.md）
+
 ## 完了の条件
 - `npm test`、`npm run typecheck`、`npm run lint` が通る
 - `npm run db:reset` で、スキーマとお寺・スタッフのシードが入る

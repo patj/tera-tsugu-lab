@@ -163,6 +163,9 @@ describe("MCP のツールの実行（2 段階の確認と監査ログ）", () =
     const who = data(await rt.call("whoami", {}, ctx));
     assert.equal((who.temple as { name: string }).name, "妙縁寺");
     assert.equal(who.now, "2026-11-05（木）10:00");
+    const staff = who.staff as Record<string, unknown>[];
+    assert.equal(staff.find((s) => s.role === "住職")?.["法要の担当者"], true);
+    assert.equal(staff.find((s) => s.role === "奥様")?.["法要の担当者"], false);
 
     const { confirmation_id } = data(await rt.call("debug_write_note", { note: "試し" }, ctx));
     data(await rt.call("confirm_action", { confirmation_id }, ctx));
