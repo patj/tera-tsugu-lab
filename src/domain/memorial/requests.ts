@@ -3,7 +3,7 @@
 import { and, asc, desc, eq, inArray, sql, type SQL } from "drizzle-orm";
 import { db, type DbOrTx } from "@/db/client";
 import { memorialRequests, memorialServices, type PreferredPeriod } from "@/db/schema";
-import { addDays, conflict, forbidden, invalid, notFound, todayJst, writeAuditLog, type Actor } from "@/domain/core";
+import { addDays, conflict, forbidden, getTemple, invalid, notFound, todayJst, writeAuditLog, type Actor } from "@/domain/core";
 import {
   assertStaff,
   checkDate,
@@ -29,6 +29,7 @@ import {
   type MemorialServiceStatus,
   type TargetView,
 } from "./types";
+import { bookingWarnings } from "./verify";
 
 /** 希望の時期は、今日から何年先まで受け付けるか */
 const MAX_YEARS_AHEAD = 3;
@@ -171,6 +172,8 @@ export type MemorialRequestView = {
   otoki: boolean | null;
   notes: string | null;
   declineReason: string | null;
+  /** 第 1 希望の始まりの日で見た注意（回忌の食い違い、命日より後）。受付済みのときだけ */
+  warnings: string[];
   service: {
     id: string;
     startAt: Date;
@@ -202,8 +205,15 @@ async function toViews(rows: RequestRow[], conn: DbOrTx): Promise<MemorialReques
     conn,
   );
 
+  const preset = (await getTemple(rows[0].templeId, conn)).preset;
+
   return rows.map((r) => {
     const h = hh.get(r.householdId);
+    const targets = r.targets.flatMap((t) => {
+      const p = people.get(t.personId);
+      return p ? [targetView(p, t.kaiki)] : [];
+    });
+    const firstDate = r.preferredPeriods?.[0]?.from;
     const by = r.requestedByPersonId ? people.get(r.requestedByPersonId) : undefined;
     const seshuP = r.seshuPersonId ? people.get(r.seshuPersonId) : undefined;
     const s = r.memorialServiceId ? serviceById.get(r.memorialServiceId) : undefined;
@@ -223,16 +233,14 @@ async function toViews(rows: RequestRow[], conn: DbOrTx): Promise<MemorialReques
       seshuPersonId: r.seshuPersonId,
       seshuName: r.seshuName,
       seshuDisplay: seshuP ? fullName(seshuP) : r.seshuName,
-      targets: r.targets.flatMap((t) => {
-        const p = people.get(t.personId);
-        return p ? [targetView(p, t.kaiki)] : [];
-      }),
+      targets,
       preferredPeriods: r.preferredPeriods ?? [],
       location: r.location as MemorialLocation,
       attendees: r.attendees,
       otoki: r.otoki,
       notes: r.notes,
       declineReason: r.declineReason,
+      warnings: r.status === "requested" && firstDate ? bookingWarnings(targets, firstDate, preset) : [],
       service:
         s && s.status !== "cancelled"
           ? {

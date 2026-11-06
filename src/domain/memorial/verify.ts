@@ -191,7 +191,7 @@ export async function verifyMemorial(
     if (!input.name?.trim() && !input.relation?.trim() && !input.homyo?.trim() && !input.householdId) {
       throw invalid("故人を決めるために、person_id か、俗名・続柄・法号・世帯のどれかを指定してください");
     }
-    const found = await searchDeceased(
+    const searched = await searchDeceased(
       actor,
       {
         name: input.name ?? undefined,
@@ -203,6 +203,10 @@ export async function verifyMemorial(
       },
       conn,
     );
+    // 続柄は部分一致で探すので「父」で「祖父」も当たる。続柄がちょうど同じ人がいれば、その人たちに絞る
+    const rel = input.relation?.replace(/[\s　]/g, "");
+    const exact = rel ? searched.filter((c) => c.relation === rel) : [];
+    const found = exact.length > 0 ? exact : searched;
     if (found.length === 0) {
       return { status: "not_found", message: "当てはまる故人が見つかりません。俗名の一部や世帯を変えて探してください" };
     }
