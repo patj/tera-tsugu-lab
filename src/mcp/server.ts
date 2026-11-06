@@ -3,6 +3,7 @@
 import { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import { StdioServerTransport } from "@modelcontextprotocol/sdk/server/stdio.js";
 import { getStaffByEmail, staffActor } from "@/domain/core";
+import type { ToolContext } from "./framework/define";
 import { bindTools } from "./framework/bind";
 import { ToolRuntime } from "./framework/runtime";
 import { allTools } from "./tools";
@@ -15,17 +16,24 @@ const INSTRUCTIONS = [
   "用語: 法要を担当できるスタッフ（is_officiant）は「法要の担当者」と呼ぶ（「導師」とは言わない）。戒名は「法号」、複数の年忌をあわせて営むことは「複数霊位供養」と呼ぶ。",
 ].join("\n");
 
+/** 操作者を DB から読む。db:reset でスタッフの ID が変わるので、呼び出しのたびに読み直す */
+async function resolveContext(email: string): Promise<ToolContext> {
+  const staff = await getStaffByEmail(email);
+  if (!staff) {
+    throw new Error(`MCP_ACTOR のスタッフが見つかりません: ${email}（npm run db:reset でシードを入れたか確かめてください）`);
+  }
+  return { actor: { ...staffActor(staff, "mcp"), staffId: staff.id }, now: new Date() };
+}
+
 async function main() {
   const email = process.env.MCP_ACTOR;
   if (!email) throw new Error("環境変数 MCP_ACTOR（操作者のスタッフのメールアドレス）を設定してください");
-  const staff = await getStaffByEmail(email);
-  if (!staff) throw new Error(`MCP_ACTOR のスタッフが見つかりません: ${email}`);
-  const actor = { ...staffActor(staff, "mcp"), staffId: staff.id };
+  const { actor } = await resolveContext(email); // 起動の時点でも確かめる（設定の誤りに早く気づくため）
 
   const server = new McpServer({ name: "tera-tsugu", version: "0.1.0" }, { instructions: INSTRUCTIONS });
-  bindTools(server, new ToolRuntime(allTools), () => ({ actor, now: new Date() }));
+  bindTools(server, new ToolRuntime(allTools), () => resolveContext(email));
   await server.connect(new StdioServerTransport());
-  console.error(`tera-tsugu MCP サーバーを起動しました（操作者: ${staff.roleTitle} ${staff.name}）`);
+  console.error(`tera-tsugu MCP サーバーを起動しました（操作者: ${actor.label}）`);
 }
 
 main().catch((e) => {

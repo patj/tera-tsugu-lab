@@ -14,7 +14,12 @@ function toContent(result: ToolResult) {
 const WRITE_NOTE =
   "\n\n【書き込み】このツールは実行せずにプレビューと confirmation_id を返す。住職の了承を得てから confirm_action で実行する。";
 
-export function bindTools(server: McpServer, runtime: ToolRuntime, makeContext: () => ToolContext): void {
+/** makeContext は呼び出しのたびに呼ぶ（db:reset でスタッフの ID が変わっても、サーバーを起動し直さずに済むように） */
+export function bindTools(
+  server: McpServer,
+  runtime: ToolRuntime,
+  makeContext: () => Promise<ToolContext>,
+): void {
   for (const tool of runtime.list()) {
     server.registerTool(
       tool.name,
@@ -23,7 +28,7 @@ export function bindTools(server: McpServer, runtime: ToolRuntime, makeContext: 
         inputSchema: tool.input,
         annotations: { readOnlyHint: tool.kind === "read" },
       },
-      async (args: unknown) => toContent(await runtime.call(tool.name, args, makeContext())),
+      async (args: unknown) => callWithContext(runtime, tool.name, args, makeContext),
     );
   }
   server.registerTool(
@@ -33,6 +38,21 @@ export function bindTools(server: McpServer, runtime: ToolRuntime, makeContext: 
       inputSchema: confirmActionInput,
       annotations: { readOnlyHint: false },
     },
-    async (args: unknown) => toContent(await runtime.call(CONFIRM_ACTION_NAME, args, makeContext())),
+    async (args: unknown) => callWithContext(runtime, CONFIRM_ACTION_NAME, args, makeContext),
   );
+}
+
+async function callWithContext(
+  runtime: ToolRuntime,
+  name: string,
+  args: unknown,
+  makeContext: () => Promise<ToolContext>,
+) {
+  let ctx: ToolContext;
+  try {
+    ctx = await makeContext();
+  } catch (e) {
+    return toContent({ ok: false, error: e instanceof Error ? e.message : String(e) });
+  }
+  return toContent(await runtime.call(name, args, ctx));
 }
