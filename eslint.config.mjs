@@ -14,6 +14,9 @@ const eslintConfig = defineConfig([
     "next-env.d.ts",
     // Claude Code の worktree（並列の実装）
     ".claude/**",
+    // お寺に渡す開発キット（別の package。npm run kit:build で dist/ に組み立てる）
+    "kit/**",
+    "dist/**",
   ]),
 ]);
 

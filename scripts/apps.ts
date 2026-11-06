@@ -161,7 +161,11 @@ export function generate(root = ROOT): void {
   writeFileSync(path.join(root, VIEWS_FILE), views);
 }
 
-export async function check(root = ROOT): Promise<Problem[]> {
+/**
+ * 規約のチェック。registry: false にすると、一覧が最新かは確かめない（開発キットでは一覧を作らないため）。
+ * このファイルは、開発キット（kit/）にもそのままコピーされる（npm run kit:build）
+ */
+export async function check(root = ROOT, opts: { registry?: boolean } = {}): Promise<Problem[]> {
   const problems: Problem[] = [];
   for (const app of listAppDirs(root)) {
     const dir = path.join(root, APPS_DIR, app);
@@ -180,6 +184,7 @@ export async function check(root = ROOT): Promise<Problem[]> {
       }
     }
   }
+  if (opts.registry === false) return problems;
   const { registry, views } = renderRegistry(publishedWithViews(root));
   const read = (f: string) => (existsSync(path.join(root, f)) ? readFileSync(path.join(root, f), "utf8") : "");
   if (read(REGISTRY_FILE) !== registry || read(VIEWS_FILE) !== views) {

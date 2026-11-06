@@ -1,0 +1,27 @@
+{
+  "name": "temple-app-kit",
+  "version": "0.1.0",
+  "private": true,
+  "description": "お寺のアプリの開発キット（アプリを作って、手元で試すためのもの）",
+  "scripts": {
+    "dev": "vite --open",
+    "apps:check": "tsx scripts/check.ts",
+    "typecheck": "tsc --noEmit"
+  },
+  "dependencies": {
+    "react": "19.3.0",
+    "react-dom": "19.3.0",
+    "zod": "^4.6.7"
+  },
+  "devDependencies": {
+    "@tailwindcss/vite": "^4.3.4",
+    "@types/node": "^22",
+    "@types/react": "^19.3.0",
+    "@types/react-dom": "^19.3.0",
+    "@vitejs/plugin-react": "^6.2.1",
+    "tailwindcss": "^4.3.4",
+    "tsx": "^4.23.15",
+    "typescript": "~5.9.3",
+    "vite": "^8.3.6"
+  }
+}

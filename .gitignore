@@ -19,6 +19,8 @@
 
 # production
 /build
+# 開発キットの組み立て先（npm run kit:build）
+/dist/
 
 # misc
 .DS_Store

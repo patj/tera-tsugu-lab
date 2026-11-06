@@ -1,0 +1,12 @@
+@import "tailwindcss";
+
+/* 本体の画面と同じ、大きめの文字 */
+html {
+  font-size: 18px;
+}
+
+body {
+  background: #fbfaf7;
+  color: #1f1d1a;
+  font-family: "Hiragino Sans", "Hiragino Kaku Gothic ProN", "Noto Sans JP", "Yu Gothic", Meiryo, sans-serif;
+}

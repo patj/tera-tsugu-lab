@@ -1,4 +1,5 @@
 // お寺のアプリの型。DB に依存しない（アプリと画面から import する）。spec.md §7
+// このファイルは、開発キット（kit/）にもそのままコピーされる（npm run kit:build）。本体とキットの API の形をそろえるため
 import type { ReactNode } from "react";
 
 export type AppManifest = {
@@ -20,6 +21,39 @@ export type AppDocument<T = unknown> = {
   createdAt: string;
   updatedAt: string;
   data: T;
+};
+
+/** useAppStorage() が返すもの */
+export type AppStorage<T> = {
+  /** 自分の文書（新しい順） */
+  docs: AppDocument<T>[];
+  /** 保存の途中か */
+  pending: boolean;
+  /** 直前の操作のエラー（利用者に見せてよい文） */
+  error: string | null;
+  /** 文書を作る。失敗したら null（error に理由が入る） */
+  create: (data: T) => Promise<AppDocument<T> | null>;
+  /** 文書を置き換える。失敗したら null */
+  update: (id: string, data: T) => Promise<AppDocument<T> | null>;
+  /** 文書を消す（元に戻せない）。失敗したら false */
+  remove: (id: string) => Promise<boolean>;
+  clearError: () => void;
+};
+
+/** useAppSharing() が返すもの */
+export type AppSharing = {
+  /** アプリがお寺との共有に対応しているか（manifest の sharing） */
+  available: boolean;
+  /** 今、お寺と共有しているか */
+  shared: boolean;
+  /** 変更の途中か */
+  pending: boolean;
+  /** 直前の操作のエラー（利用者に見せてよい文） */
+  error: string | null;
+  /** 共有する。オンにする前に、何が共有されるかを本人に説明すること（apps/CLAUDE.md）。成功すると true */
+  share: () => Promise<boolean>;
+  /** 共有をやめる。成功すると true */
+  unshare: () => Promise<boolean>;
 };
 
 /** App.tsx の props */

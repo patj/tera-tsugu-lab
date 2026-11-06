@@ -84,6 +84,22 @@ npm run dev           # 起動中なら、かわりに npm run apps:gen
 
 公開は、アプリのディレクトリをリポジトリに入れて、`npm run apps:gen` で一覧に載せること（下書きの状態はまだない）。
 
+### 3-5. お寺さんに作ってもらう（開発キット）
+本体を渡さずに、お寺さんにアプリを作ってもらうときは、開発キットを渡す。
+
+```sh
+npm run kit:build     # dist/temple-app-kit.zip ができる
+```
+
+キットには、試す画面（本体に近い見た目。保存先はブラウザの中）、本体と同じ API の SDK、`apps:check`、ひな形、Claude Code の決まりと skill、お寺さん向けの `README.md` が入っている。
+
+送られてきたアプリ（`apps/<app-id>/` の zip）を組み込むとき:
+1. zip を展開し、`apps/<app-id>/` に置く（同じ ID のアプリがないことを確かめる）
+2. **コードを読む**: データの持ち出しや外部への送信がないか、共有をオンにする前に説明があるか、Admin.tsx に保存した内容だけを出しているか
+3. `npm run apps:gen`、`npm run apps:check`、`npm run typecheck`、`npm run lint`
+4. `npm run dev` で、上の「3-3. 確かめる」を本体で試す（日時の表示など、試す画面と違うところがないか）
+5. コミットする
+
 ## 4. `npm run apps:check` が見ること
 
 - 必要なファイル（manifest.ts、App.tsx、README.md。`sharing: true` なら Admin.tsx）がそろっている

@@ -16,6 +16,7 @@
     "mcp:config": "tsx --env-file-if-exists=.env scripts/mcp-config.ts",
     "apps:gen": "tsx scripts/apps.ts gen",
     "apps:check": "tsx scripts/apps.ts check",
+    "kit:build": "tsx scripts/build-kit.ts",
     "predev": "npm run apps:gen",
     "prebuild": "npm run apps:gen"
   },

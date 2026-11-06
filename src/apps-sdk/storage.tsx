@@ -4,7 +4,7 @@
 // 本体のページが AppStorageProvider で囲み、最初の文書と共有の状態を渡す。保存と共有の変更は /apps/api/<app-id>/ を通る
 // （サーバーで、cookie の利用者とアプリの ID を確かめ、暗号化して保存する。共有の変更は履歴と監査ログに残る）。
 import { createContext, useCallback, useContext, useMemo, useState, type ReactNode } from "react";
-import type { AppDocument } from "./types";
+import type { AppDocument, AppSharing, AppStorage } from "./types";
 
 type StorageState = {
   docs: AppDocument[];
@@ -151,41 +151,10 @@ function useStorageContext(name: string): StorageState {
   return s;
 }
 
-export type AppStorage<T> = {
-  /** 自分の文書（新しい順） */
-  docs: AppDocument<T>[];
-  /** 保存の途中か */
-  pending: boolean;
-  /** 直前の操作のエラー（利用者に見せてよい文） */
-  error: string | null;
-  /** 文書を作る。失敗したら null（error に理由が入る） */
-  create: (data: T) => Promise<AppDocument<T> | null>;
-  /** 文書を置き換える。失敗したら null */
-  update: (id: string, data: T) => Promise<AppDocument<T> | null>;
-  /** 文書を消す（元に戻せない）。失敗したら false */
-  remove: (id: string) => Promise<boolean>;
-  clearError: () => void;
-};
-
 /** 利用者の文書を読み書きする。T は文書の data の型（アプリが決める） */
 export function useAppStorage<T = unknown>(): AppStorage<T> {
   return useStorageContext("useAppStorage") as unknown as AppStorage<T>;
 }
-
-export type AppSharing = {
-  /** アプリがお寺との共有に対応しているか（manifest の sharing） */
-  available: boolean;
-  /** 今、お寺と共有しているか */
-  shared: boolean;
-  /** 変更の途中か */
-  pending: boolean;
-  /** 直前の操作のエラー（利用者に見せてよい文） */
-  error: string | null;
-  /** 共有する。オンにする前に、何が共有されるかを本人に説明すること（apps/CLAUDE.md）。成功すると true */
-  share: () => Promise<boolean>;
-  /** 共有をやめる。成功すると true */
-  unshare: () => Promise<boolean>;
-};
 
 /** お寺との共有（文言、デザイン、置き場所はアプリが自由に決める。変更は履歴と監査ログに残り、基盤の帯の表示も変わる） */
 export function useAppSharing(): AppSharing {
